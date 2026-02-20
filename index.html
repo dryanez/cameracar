@@ -41,11 +41,67 @@
       width: 100%;
       height: calc(var(--app-h, 100vh) * 0.65);
       object-fit: contain;
-      opacity: 0.5;
+      opacity: 0.45;
       filter: drop-shadow(0 0 6px rgba(200,160,60,0.4));
       transition: opacity 0.3s, filter 0.3s;
       margin-top: -40px;
     }
+
+    /* Alignment frame around overlay */
+    #align-frame {
+      position:absolute; top:50%; left:50%; z-index:11;
+      width: 75%; max-width:420px;
+      height: calc(var(--app-h, 100vh) * 0.50);
+      transform: translate(-50%, -58%);
+      border: 3px solid rgba(255,60,60,0.6);
+      border-radius: 18px;
+      pointer-events:none;
+      transition: border-color 0.4s, box-shadow 0.4s;
+    }
+    /* Corner brackets */
+    #align-frame::before, #align-frame::after {
+      content:''; position:absolute; width:28px; height:28px;
+      border-color:inherit; border-style:solid;
+    }
+    #align-frame::before { top:-2px; left:-2px; border-width:4px 0 0 4px; border-radius:14px 0 0 0; }
+    #align-frame::after { top:-2px; right:-2px; border-width:4px 4px 0 0; border-radius:0 14px 0 0; }
+    .corner-bl, .corner-br {
+      position:absolute; width:28px; height:28px;
+      border-color:inherit; border-style:solid; pointer-events:none;
+    }
+    .corner-bl { bottom:-2px; left:-2px; border-width:0 0 4px 4px; border-radius:0 0 0 14px; }
+    .corner-br { bottom:-2px; right:-2px; border-width:0 4px 4px 0; border-radius:0 0 14px 0; }
+
+    /* States */
+    #align-frame.seeking { border-color: rgba(255,60,60,0.6); }
+    #align-frame.close { border-color: rgba(255,200,40,0.8); box-shadow: 0 0 20px rgba(255,200,40,0.15); }
+    #align-frame.locked {
+      border-color: rgba(40,220,80,0.9);
+      box-shadow: 0 0 30px rgba(40,220,80,0.2);
+      animation: pulse-green 1s ease infinite;
+    }
+    @keyframes pulse-green {
+      0%,100% { box-shadow: 0 0 20px rgba(40,220,80,0.15); }
+      50% { box-shadow: 0 0 40px rgba(40,220,80,0.35); }
+    }
+    #align-frame.captured {
+      border-color: rgba(40,220,80,1);
+      box-shadow: 0 0 50px rgba(40,220,80,0.5);
+    }
+
+    /* Hold-still progress ring */
+    #hold-progress {
+      position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+      width:90px; height:90px; z-index:16; pointer-events:none;
+      opacity:0; transition:opacity 0.3s;
+    }
+    #hold-progress.visible { opacity:1; }
+    #hold-progress svg { width:100%; height:100%; transform:rotate(-90deg); }
+    #hold-progress circle {
+      fill:none; stroke-width:4; cx:45; cy:45; r:40;
+    }
+    .prog-bg { stroke:rgba(255,255,255,0.15); }
+    .prog-fg { stroke:rgba(40,220,80,0.9); stroke-dasharray:251.3; stroke-dashoffset:251.3; stroke-linecap:round; transition:stroke-dashoffset 0.1s linear; }
 
     /* ===== LANDSCAPE MODE (PHONE) ===== */
     @media (orientation: landscape) {
@@ -53,6 +109,10 @@
         height: calc(var(--app-h, 100vh) * 0.75);
         width: 50%;
         margin-top: -20px;
+      }
+      #align-frame {
+        width: 45%; height: calc(var(--app-h, 100vh) * 0.65);
+        transform: translate(-50%, -55%);
       }
       .top-bar { padding-top:4px !important; padding-bottom:2px; }
       .top-close { font-size:20px; }
@@ -110,14 +170,19 @@
       bottom: 290px;
       display:flex; flex-direction:column; align-items:center; gap:6px;
       pointer-events:none;
+      transition: opacity 0.3s;
     }
     .align-arrow { font-size:28px; opacity:0.5; animation:bounce 1.5s ease infinite; }
     @keyframes bounce { 0%,100%{transform:translateY(0);} 50%{transform:translateY(6px);} }
     .align-badge {
-      background:rgba(160,130,80,0.85);
       backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
       padding:12px 28px; border-radius:14px; font-size:16px; font-weight:600;
+      transition: background 0.4s;
     }
+    .align-badge.seeking { background:rgba(255,60,60,0.7); }
+    .align-badge.close { background:rgba(255,180,30,0.8); }
+    .align-badge.locked { background:rgba(40,200,70,0.85); }
+    .align-badge.captured { background:rgba(40,220,80,0.95); }
     .align-sub { font-size:13px; color:rgba(255,255,255,0.5); }
 
     /* ===== BOTTOM PANEL ===== */
@@ -242,6 +307,20 @@
 
   <div id="ghost">
     <img id="overlay-img" src="" alt="">
+  </div>
+
+  <!-- Alignment frame with corner brackets -->
+  <div id="align-frame" class="seeking">
+    <div class="corner-bl"></div>
+    <div class="corner-br"></div>
+  </div>
+
+  <!-- Hold-still progress ring -->
+  <div id="hold-progress">
+    <svg viewBox="0 0 90 90">
+      <circle class="prog-bg" cx="45" cy="45" r="40"/>
+      <circle class="prog-fg" id="prog-circle" cx="45" cy="45" r="40"/>
+    </svg>
   </div>
 
   <div class="top-bar">
@@ -406,6 +485,9 @@ function onCamSuccess(stream) {
       S.face = settings.facingMode;
     }
   }
+
+  // Start motion detection for alignment feedback
+  startMotionDetection();
 }
 
 function flipCam() {
@@ -444,12 +526,14 @@ function pickShot(i) {
     if (j === i) { thumbs[j].classList.add('active'); }
     else { thumbs[j].classList.remove('active'); }
   }
-  q('align-txt').textContent = 'Align the camera!';
+  // Reset alignment state
+  resetAlign();
   q('align-sub').textContent = shots[i].l;
 }
 
 // Capture
 function capture() {
+  S.autoCapturing = false; // stop auto-capture loop
   var v = q('video');
   var c = q('cv');
   c.width = v.videoWidth;
@@ -457,7 +541,13 @@ function capture() {
   c.getContext('2d').drawImage(v, 0, 0);
   q('flash').classList.add('on');
   q('cap').classList.add('flash');
-  if (navigator.vibrate) navigator.vibrate(50);
+  if (navigator.vibrate) navigator.vibrate([30, 50, 30]);
+
+  // Show captured state
+  setAlignState('captured');
+  q('align-txt').textContent = '✓ Captured!';
+  q('hold-progress').classList.remove('visible');
+
   setTimeout(function() {
     q('flash').classList.remove('on');
     q('cap').classList.remove('flash');
@@ -466,9 +556,237 @@ function capture() {
   var shot = OV[S.cat][S.idx];
   S.photos.push({ url:url, label:S.cat + ' - ' + shot.l, time:new Date().toLocaleTimeString() });
   updGal();
-  toast('Captured: ' + shot.l);
+  toast('✓ ' + shot.l);
   if (S.idx < OV[S.cat].length - 1) {
-    setTimeout(function() { pickShot(S.idx + 1); }, 400);
+    setTimeout(function() { pickShot(S.idx + 1); }, 800);
+  }
+}
+
+// ===== ALIGNMENT & MOTION DETECTION =====
+// Tracks phone steadiness using DeviceMotion accelerometer
+var A = {
+  state: 'seeking',     // seeking | close | locked | captured
+  steadyStart: 0,       // timestamp when phone became steady
+  holdTime: 1500,       // ms to hold still before auto-capture
+  motionSamples: [],    // recent acceleration samples
+  sampleSize: 8,        // number of samples to average
+  thresholdClose: 3.0,  // motion below this = "close" (getting steady)
+  thresholdLock: 0.8,   // motion below this = "locked" (hold still)
+  autoCapturing: false,
+  rafId: null
+};
+
+function resetAlign() {
+  A.state = 'seeking';
+  A.steadyStart = 0;
+  A.autoCapturing = false;
+  S.autoCapturing = false;
+  setAlignState('seeking');
+  q('align-txt').textContent = 'Align the camera';
+  q('hold-progress').classList.remove('visible');
+  setProgress(0);
+}
+
+function setAlignState(state) {
+  A.state = state;
+  var frame = q('align-frame');
+  var badge = q('align-txt');
+  frame.className = state;
+  badge.className = 'align-badge ' + state;
+}
+
+function setProgress(pct) {
+  // pct 0-1
+  var circumference = 251.3; // 2 * PI * 40
+  var offset = circumference * (1 - pct);
+  q('prog-circle').style.strokeDashoffset = offset;
+}
+
+// Listen to device motion (accelerometer)
+function onDeviceMotion(e) {
+  var acc = e.accelerationIncludingGravity || e.acceleration;
+  if (!acc) return;
+
+  // Calculate magnitude of acceleration change (jitter)
+  var mag = Math.sqrt(acc.x * acc.x + acc.y * acc.y + acc.z * acc.z);
+
+  A.motionSamples.push(mag);
+  if (A.motionSamples.length > A.sampleSize) {
+    A.motionSamples.shift();
+  }
+
+  // Average jitter
+  var sum = 0;
+  for (var i = 0; i < A.motionSamples.length; i++) sum += A.motionSamples[i];
+  var avg = sum / A.motionSamples.length;
+
+  // Calculate variance (how much it's changing)
+  var variance = 0;
+  for (var i = 0; i < A.motionSamples.length; i++) {
+    var diff = A.motionSamples[i] - avg;
+    variance += diff * diff;
+  }
+  variance = variance / A.motionSamples.length;
+  var jitter = Math.sqrt(variance);
+
+  // Don't update if already captured or auto-capturing
+  if (A.state === 'captured' || S.autoCapturing) return;
+
+  var now = Date.now();
+
+  if (jitter < A.thresholdLock && A.motionSamples.length >= A.sampleSize) {
+    // Very steady — locked!
+    if (A.state !== 'locked') {
+      setAlignState('locked');
+      q('align-txt').textContent = '● Hold still...';
+      q('hold-progress').classList.add('visible');
+      A.steadyStart = now;
+      if (navigator.vibrate) navigator.vibrate(15);
+    }
+
+    // Progress toward auto-capture
+    var elapsed = now - A.steadyStart;
+    var pct = Math.min(elapsed / A.holdTime, 1);
+    setProgress(pct);
+
+    if (pct >= 1 && !S.autoCapturing) {
+      // Auto-capture!
+      S.autoCapturing = true;
+      if (navigator.vibrate) navigator.vibrate([40, 30, 40]);
+      capture();
+    }
+  } else if (jitter < A.thresholdClose) {
+    // Getting close — yellow
+    if (A.state !== 'close') {
+      setAlignState('close');
+      q('align-txt').textContent = 'Almost there...';
+      q('hold-progress').classList.remove('visible');
+      A.steadyStart = 0;
+      setProgress(0);
+    }
+  } else {
+    // Too much movement — red
+    if (A.state !== 'seeking') {
+      setAlignState('seeking');
+      q('align-txt').textContent = 'Align the camera';
+      q('hold-progress').classList.remove('visible');
+      A.steadyStart = 0;
+      setProgress(0);
+    }
+  }
+}
+
+// Request motion permission (required on iOS 13+)
+function startMotionDetection() {
+  if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+    // iOS 13+ requires permission
+    DeviceMotionEvent.requestPermission().then(function(response) {
+      if (response === 'granted') {
+        window.addEventListener('devicemotion', onDeviceMotion, true);
+      }
+    }).catch(function() {
+      // Permission denied or not available — use fallback
+      startFallbackDetection();
+    });
+  } else if (typeof DeviceMotionEvent !== 'undefined') {
+    // Android or older iOS — just listen
+    window.addEventListener('devicemotion', onDeviceMotion, true);
+    // Check if we actually get events (some desktops don't)
+    setTimeout(function() {
+      if (A.motionSamples.length === 0) {
+        startFallbackDetection();
+      }
+    }, 1000);
+  } else {
+    startFallbackDetection();
+  }
+}
+
+// Fallback: use video frame analysis for motion detection (works on desktop too)
+var fallbackPrevFrame = null;
+function startFallbackDetection() {
+  var miniCanvas = document.createElement('canvas');
+  miniCanvas.width = 64;
+  miniCanvas.height = 48;
+  var ctx = miniCanvas.getContext('2d');
+
+  function checkFrame() {
+    if (A.state === 'captured' || S.autoCapturing) {
+      fallbackPrevFrame = null;
+      A.rafId = requestAnimationFrame(checkFrame);
+      return;
+    }
+
+    var v = q('video');
+    if (!v || v.readyState < 2) {
+      A.rafId = requestAnimationFrame(checkFrame);
+      return;
+    }
+
+    ctx.drawImage(v, 0, 0, 64, 48);
+    var data = ctx.getImageData(0, 0, 64, 48).data;
+
+    if (fallbackPrevFrame) {
+      // Compare frames — sum of pixel differences
+      var diff = 0;
+      var pixels = data.length / 4;
+      for (var i = 0; i < data.length; i += 16) { // sample every 4th pixel
+        diff += Math.abs(data[i] - fallbackPrevFrame[i]);
+        diff += Math.abs(data[i+1] - fallbackPrevFrame[i+1]);
+        diff += Math.abs(data[i+2] - fallbackPrevFrame[i+2]);
+      }
+      var avgDiff = diff / (pixels / 4);
+
+      // Simulate motion event
+      var fakeJitter = avgDiff / 10;
+      onDeviceMotionFallback(fakeJitter);
+    }
+
+    fallbackPrevFrame = new Uint8Array(data);
+    A.rafId = requestAnimationFrame(checkFrame);
+  }
+
+  A.rafId = requestAnimationFrame(checkFrame);
+}
+
+function onDeviceMotionFallback(jitter) {
+  if (A.state === 'captured' || S.autoCapturing) return;
+
+  var now = Date.now();
+
+  if (jitter < 0.5) {
+    // Very steady
+    if (A.state !== 'locked') {
+      setAlignState('locked');
+      q('align-txt').textContent = '● Hold still...';
+      q('hold-progress').classList.add('visible');
+      A.steadyStart = now;
+      if (navigator.vibrate) navigator.vibrate(15);
+    }
+    var elapsed = now - A.steadyStart;
+    var pct = Math.min(elapsed / A.holdTime, 1);
+    setProgress(pct);
+    if (pct >= 1 && !S.autoCapturing) {
+      S.autoCapturing = true;
+      if (navigator.vibrate) navigator.vibrate([40, 30, 40]);
+      capture();
+    }
+  } else if (jitter < 1.5) {
+    if (A.state !== 'close') {
+      setAlignState('close');
+      q('align-txt').textContent = 'Almost there...';
+      q('hold-progress').classList.remove('visible');
+      A.steadyStart = 0;
+      setProgress(0);
+    }
+  } else {
+    if (A.state !== 'seeking') {
+      setAlignState('seeking');
+      q('align-txt').textContent = 'Align the camera';
+      q('hold-progress').classList.remove('visible');
+      A.steadyStart = 0;
+      setProgress(0);
+    }
   }
 }
 
