@@ -231,7 +231,8 @@
   <div class="perm-icon">📷</div>
   <div class="perm-title">Ghost Overlay Camera</div>
   <div class="perm-sub">Guided vehicle photography with transparent wireframe overlays.</div>
-  <button class="perm-btn" id="start-btn">Enable Camera</button>
+  <button class="perm-btn" id="start-btn">📷 Start Camera</button>
+  <div style="margin-top:12px; font-size:12px; color:rgba(255,255,255,0.3);">Opens in fullscreen</div>
   <div id="perm-err"></div>
 </div>
 
@@ -479,9 +480,16 @@ function toast(m) {
 }
 
 function toggleFS() {
-  if (!document.fullscreenElement) {
-    if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen();
-    else if (document.documentElement.webkitRequestFullscreen) document.documentElement.webkitRequestFullscreen();
+  if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+    var el = document.documentElement;
+    if (el.requestFullscreen) {
+      el.requestFullscreen({ navigationUI: 'hide' }).then(function() {
+        setTimeout(fixViewport, 100);
+        toast('Fullscreen');
+      }).catch(function(){});
+    } else if (el.webkitRequestFullscreen) {
+      el.webkitRequestFullscreen();
+    }
   } else {
     if (document.exitFullscreen) document.exitFullscreen();
     else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
@@ -573,31 +581,72 @@ fixViewport();
 // ===== FULLSCREEN ON CAMERA START =====
 var origStartCam = startCam;
 startCam = function() {
-  // Try fullscreen (works on Chrome Android, not Safari iOS)
+  // Chrome Android: go fullscreen — removes address bar completely!
   try {
     var el = document.documentElement;
-    if (el.requestFullscreen) el.requestFullscreen().catch(function(){});
-    else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+    if (el.requestFullscreen) {
+      el.requestFullscreen({ navigationUI: 'hide' }).then(function() {
+        setTimeout(fixViewport, 100);
+        setTimeout(fixViewport, 400);
+      }).catch(function(){});
+    } else if (el.webkitRequestFullscreen) {
+      el.webkitRequestFullscreen();
+    }
   } catch(e) {}
+
+  // Keep screen awake while camera is active
+  try {
+    if ('wakeLock' in navigator) {
+      navigator.wakeLock.request('screen').catch(function(){});
+    }
+  } catch(e) {}
+
   fixViewport();
   origStartCam();
   setTimeout(fixViewport, 300);
   setTimeout(fixViewport, 800);
 };
 
+// Re-fix viewport when entering/exiting fullscreen
+document.addEventListener('fullscreenchange', function() {
+  setTimeout(fixViewport, 50);
+  setTimeout(fixViewport, 200);
+  setTimeout(fixViewport, 500);
+});
+document.addEventListener('webkitfullscreenchange', function() {
+  setTimeout(fixViewport, 50);
+  setTimeout(fixViewport, 200);
+});
+
 // ===== PWA INSTALL BANNER =====
-// Show "Add to Home Screen" tip on iOS Safari (not in standalone mode)
 (function() {
   var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
   var isSafari = /Safari/.test(navigator.userAgent) && !/CriOS|Chrome/.test(navigator.userAgent);
-  var isStandalone = window.navigator.standalone === true;
+  var isStandalone = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches || window.matchMedia('(display-mode: fullscreen)').matches;
   var dismissed = localStorage.getItem('pwa-dismissed');
 
+  // Show on iOS Safari
   if (isIOS && isSafari && !isStandalone && !dismissed) {
     setTimeout(function() {
       q('pwa-banner').style.display = 'block';
-    }, 2000);
+    }, 3000);
   }
+
+  // Chrome Android: capture install prompt
+  window.addEventListener('beforeinstallprompt', function(e) {
+    e.preventDefault();
+    if (!dismissed) {
+      setTimeout(function() {
+        q('pwa-banner').style.display = 'block';
+      }, 3000);
+      q('pwa-dismiss').onclick = function() {
+        q('pwa-banner').style.display = 'none';
+        localStorage.setItem('pwa-dismissed', '1');
+        // Trigger the native install prompt
+        e.prompt();
+      };
+    }
+  });
 
   q('pwa-dismiss').onclick = function() {
     q('pwa-banner').style.display = 'none';
@@ -606,8 +655,12 @@ startCam = function() {
 })();
 
 // ===== LOCK LANDSCAPE HINT =====
-// If in portrait, suggest rotating
 screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape').catch(function(){});
+
+// ===== SERVICE WORKER (required for Chrome PWA install) =====
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(function(){});
+}
 </script>
 </body>
 </html>
