@@ -232,7 +232,7 @@
   <div class="perm-title">Ghost Overlay Camera</div>
   <div class="perm-sub">Guided vehicle photography with transparent wireframe overlays.</div>
   <button class="perm-btn" id="start-btn">📷 Start Camera</button>
-  <div style="margin-top:12px; font-size:12px; color:rgba(255,255,255,0.3);">Opens in fullscreen</div>
+  <div id="perm-tip" style="margin-top:12px; font-size:12px; color:rgba(255,255,255,0.3);"></div>
   <div id="perm-err"></div>
 </div>
 
@@ -289,14 +289,14 @@
 <div class="toast" id="toast"></div>
 
 <!-- PWA Install Banner -->
-<div id="pwa-banner" style="display:none; position:fixed; bottom:0; left:0; right:0; z-index:200; background:rgba(30,30,30,0.97); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); padding:16px 20px; padding-bottom:max(env(safe-area-inset-bottom,16px),20px); border-top:1px solid rgba(255,255,255,0.1);">
-  <div style="display:flex; align-items:center; gap:14px; max-width:500px; margin:0 auto;">
-    <div style="font-size:32px;">📷</div>
+<div id="pwa-banner" style="display:none; position:fixed; bottom:0; left:0; right:0; z-index:200; background:rgba(30,30,30,0.97); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); padding:14px 16px; padding-bottom:max(env(safe-area-inset-bottom,14px),18px); border-top:1px solid rgba(255,255,255,0.1);">
+  <div style="display:flex; align-items:center; gap:12px; max-width:500px; margin:0 auto;">
+    <div style="font-size:28px;">📷</div>
     <div style="flex:1;">
-      <div style="font-size:14px; font-weight:600;">Add to Home Screen</div>
-      <div style="font-size:12px; color:rgba(255,255,255,0.5); margin-top:2px;">For fullscreen &mdash; no Safari bar!</div>
+      <div style="font-size:13px; font-weight:600;" id="pwa-title">Go Fullscreen</div>
+      <div style="font-size:11px; color:rgba(255,255,255,0.5); margin-top:2px; line-height:1.4;" id="pwa-msg">Tap ⛶ button or add to Home Screen for no browser bars!</div>
     </div>
-    <button id="pwa-dismiss" style="background:rgba(255,255,255,0.15); border:none; color:#fff; padding:8px 16px; border-radius:8px; font-size:13px; cursor:pointer;">Got it</button>
+    <button id="pwa-dismiss" style="background:rgba(255,255,255,0.15); border:none; color:#fff; padding:7px 14px; border-radius:8px; font-size:12px; cursor:pointer; white-space:nowrap;">Got it</button>
   </div>
 </div>
 
@@ -486,9 +486,21 @@ function toggleFS() {
       el.requestFullscreen({ navigationUI: 'hide' }).then(function() {
         setTimeout(fixViewport, 100);
         toast('Fullscreen');
-      }).catch(function(){});
+      }).catch(function(){
+        // iOS fallback: try video fullscreen
+        var v = q('video');
+        if (v && v.webkitEnterFullscreen) {
+          try { v.webkitEnterFullscreen(); } catch(e2) {}
+        }
+      });
     } else if (el.webkitRequestFullscreen) {
       el.webkitRequestFullscreen();
+    } else {
+      // Last resort for iOS: try video element
+      var v = q('video');
+      if (v && v.webkitEnterFullscreen) {
+        try { v.webkitEnterFullscreen(); } catch(e) {}
+      }
     }
   } else {
     if (document.exitFullscreen) document.exitFullscreen();
@@ -581,14 +593,17 @@ fixViewport();
 // ===== FULLSCREEN ON CAMERA START =====
 var origStartCam = startCam;
 startCam = function() {
-  // Chrome Android: go fullscreen — removes address bar completely!
+  // Try fullscreen (Chrome Android = works, iOS = won't but we try anyway)
   try {
     var el = document.documentElement;
     if (el.requestFullscreen) {
       el.requestFullscreen({ navigationUI: 'hide' }).then(function() {
         setTimeout(fixViewport, 100);
         setTimeout(fixViewport, 400);
-      }).catch(function(){});
+      }).catch(function(){
+        // iOS: requestFullscreen fails, just fix viewport
+        fixViewport();
+      });
     } else if (el.webkitRequestFullscreen) {
       el.webkitRequestFullscreen();
     }
@@ -620,37 +635,51 @@ document.addEventListener('webkitfullscreenchange', function() {
 
 // ===== PWA INSTALL BANNER =====
 (function() {
-  var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-  var isSafari = /Safari/.test(navigator.userAgent) && !/CriOS|Chrome/.test(navigator.userAgent);
+  var ua = navigator.userAgent;
+  var isIOS = /iPad|iPhone|iPod/.test(ua);
+  var isChromeIOS = /CriOS/.test(ua);
+  var isSafariIOS = isIOS && /Safari/.test(ua) && !isChromeIOS && !/FxiOS|EdgiOS/.test(ua);
+  var isAndroid = /Android/.test(ua);
   var isStandalone = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches || window.matchMedia('(display-mode: fullscreen)').matches;
   var dismissed = localStorage.getItem('pwa-dismissed');
+  var savedPrompt = null;
 
-  // Show on iOS Safari
-  if (isIOS && isSafari && !isStandalone && !dismissed) {
+  function showBanner(title, msg) {
+    if (dismissed || isStandalone) return;
+    q('pwa-title').textContent = title;
+    q('pwa-msg').textContent = msg;
     setTimeout(function() {
       q('pwa-banner').style.display = 'block';
-    }, 3000);
+    }, 2500);
   }
 
-  // Chrome Android: capture install prompt
+  // iOS Safari: "Add to Home Screen" from share menu
+  if (isSafariIOS && !isStandalone && !dismissed) {
+    showBanner('Go Fullscreen', 'Tap Share ↗ then "Add to Home Screen" for no browser bars!');
+  }
+
+  // Chrome on iPhone: can't do fullscreen, suggest opening in Safari to add to home screen
+  if (isChromeIOS && !isStandalone && !dismissed) {
+    showBanner('For best experience', 'Open in Safari → Share ↗ → "Add to Home Screen" for fullscreen mode. Or tap ⛶ to try fullscreen.');
+  }
+
+  // Chrome Android: native install prompt
   window.addEventListener('beforeinstallprompt', function(e) {
     e.preventDefault();
-    if (!dismissed) {
-      setTimeout(function() {
-        q('pwa-banner').style.display = 'block';
-      }, 3000);
-      q('pwa-dismiss').onclick = function() {
-        q('pwa-banner').style.display = 'none';
-        localStorage.setItem('pwa-dismissed', '1');
-        // Trigger the native install prompt
-        e.prompt();
-      };
+    savedPrompt = e;
+    if (!dismissed && !isStandalone) {
+      showBanner('Install App', 'Install for fullscreen with no browser bars!');
     }
   });
 
   q('pwa-dismiss').onclick = function() {
     q('pwa-banner').style.display = 'none';
     localStorage.setItem('pwa-dismissed', '1');
+    // If we have a Chrome install prompt, trigger it
+    if (savedPrompt) {
+      savedPrompt.prompt();
+      savedPrompt = null;
+    }
   };
 })();
 
@@ -661,6 +690,26 @@ screen.orientation && screen.orientation.lock && screen.orientation.lock('landsc
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch(function(){});
 }
+
+// ===== PERMISSION SCREEN TIP =====
+(function() {
+  var ua = navigator.userAgent;
+  var tip = q('perm-tip');
+  var isIOS = /iPad|iPhone|iPod/.test(ua);
+  var isChromeIOS = /CriOS/.test(ua);
+  var isStandalone = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches || window.matchMedia('(display-mode: fullscreen)').matches;
+
+  if (isStandalone) {
+    tip.textContent = '✓ Running in fullscreen mode';
+    tip.style.color = 'rgba(100,255,100,0.5)';
+  } else if (isChromeIOS) {
+    tip.textContent = 'Tip: Open in Safari → Add to Home Screen for fullscreen';
+  } else if (isIOS) {
+    tip.textContent = 'Tip: Add to Home Screen for fullscreen (no bars)';
+  } else {
+    tip.textContent = 'Opens in fullscreen';
+  }
+})();
 </script>
 </body>
 </html>
