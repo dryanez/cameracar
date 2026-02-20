@@ -1,12 +1,12 @@
 {
-  "name": "Ghost Overlay Camera",
-  "short_name": "GhostCam",
+  "name": "Cámara con Superposición",
+  "short_name": "CámaraCar",
   "start_url": "/",
   "display": "fullscreen",
   "orientation": "any",
   "background_color": "#000000",
   "theme_color": "#000000",
-  "description": "Guided vehicle photography with ghost overlays",
+  "description": "Fotografía guiada de vehículos con superposiciones transparentes",
   "categories": ["photography", "utilities"],
   "icons": [
     {

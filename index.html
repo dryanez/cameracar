@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover, maximum-scale=1, interactive-widget=resizes-content">
@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="theme-color" content="#000000">
-  <title>Ghost Overlay Camera</title>
+  <title>Cámara con Superposición</title>
   <link rel="manifest" href="manifest.json">
   <!-- TensorFlow.js + COCO-SSD for vehicle detection -->
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js"></script>
@@ -377,9 +377,9 @@
 <!-- PERMISSION SCREEN -->
 <div id="perm">
   <div class="perm-icon">📷</div>
-  <div class="perm-title">Ghost Overlay Camera</div>
-  <div class="perm-sub">Guided vehicle photography with transparent wireframe overlays.</div>
-  <button class="perm-btn" id="start-btn">📷 Start Camera</button>
+  <div class="perm-title">Cámara con Superposición</div>
+  <div class="perm-sub">Fotografía guiada de vehículos con superposiciones transparentes.</div>
+  <button class="perm-btn" id="start-btn">📷 Iniciar Cámara</button>
   <div id="perm-tip" style="margin-top:12px; font-size:12px; color:rgba(255,255,255,0.3);"></div>
   <div id="perm-err"></div>
 </div>
@@ -409,15 +409,15 @@
   <div class="top-bar">
     <button class="top-close" id="close-btn">&#x2715;</button>
     <div class="top-right">
-      <button class="top-icon-btn" id="fs-btn" title="Fullscreen">&#x26F6;</button>
-      <button class="top-icon-btn" id="sw-btn" title="Switch">&#x1F504;</button>
+      <button class="top-icon-btn" id="fs-btn" title="Pantalla completa">&#x26F6;</button>
+      <button class="top-icon-btn" id="sw-btn" title="Cambiar">&#x1F504;</button>
     </div>
   </div>
 
   <div class="align-prompt">
     <div class="align-arrows" id="align-arrows"></div>
-    <div class="align-badge" id="align-txt">Loading AI...</div>
-    <div class="align-sub" id="align-sub">Position vehicle within overlay</div>
+    <div class="align-badge" id="align-txt">Cargando IA...</div>
+    <div class="align-sub" id="align-sub">Posiciona el vehículo dentro de la superposición</div>
   </div>
 
   <div class="bottom-panel">
@@ -428,9 +428,9 @@
       <button class="side-btn" id="sw2">&#x1F504;</button>
     </div>
     <div class="cat-tabs" id="tabs">
-      <button class="cat-tab active" data-cat="sedan">Sedan</button>
+      <button class="cat-tab active" data-cat="sedan">Sedán</button>
       <button class="cat-tab" data-cat="suv">SUV</button>
-      <button class="cat-tab" data-cat="truck">Truck</button>
+      <button class="cat-tab" data-cat="truck">Camioneta</button>
       <button class="cat-tab" data-cat="interior">Interior</button>
     </div>
   </div>
@@ -445,11 +445,11 @@
 <!-- GALLERY -->
 <div id="gallery">
   <div class="gh">
-    <button class="back" id="g-back">&larr; Back</button>
-    <span class="title">Captured Photos</span>
-    <button class="clear" id="g-clear">Clear</button>
+    <button class="back" id="g-back">&larr; Volver</button>
+    <span class="title">Fotos Capturadas</span>
+    <button class="clear" id="g-clear">Borrar</button>
   </div>
-  <div class="gg" id="g-grid"><div class="ge">No photos yet</div></div>
+  <div class="gg" id="g-grid"><div class="ge">Sin fotos aún</div></div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -459,10 +459,10 @@
   <div style="display:flex; align-items:center; gap:12px; max-width:500px; margin:0 auto;">
     <div style="font-size:28px;">📷</div>
     <div style="flex:1;">
-      <div style="font-size:13px; font-weight:600;" id="pwa-title">Go Fullscreen</div>
-      <div style="font-size:11px; color:rgba(255,255,255,0.5); margin-top:2px; line-height:1.4;" id="pwa-msg">Tap ⛶ button or add to Home Screen for no browser bars!</div>
+      <div style="font-size:13px; font-weight:600;" id="pwa-title">Pantalla Completa</div>
+      <div style="font-size:11px; color:rgba(255,255,255,0.5); margin-top:2px; line-height:1.4;" id="pwa-msg">Toca el botón ⛶ o añade a la pantalla de inicio para quitar las barras del navegador.</div>
     </div>
-    <button id="pwa-dismiss" style="background:rgba(255,255,255,0.15); border:none; color:#fff; padding:7px 14px; border-radius:8px; font-size:12px; cursor:pointer; white-space:nowrap;">Got it</button>
+    <button id="pwa-dismiss" style="background:rgba(255,255,255,0.15); border:none; color:#fff; padding:7px 14px; border-radius:8px; font-size:12px; cursor:pointer; white-space:nowrap;">Entendido</button>
   </div>
 </div>
 
@@ -471,41 +471,41 @@
 <script>
 var OV = {
   sedan: [
-    { f:'overlays/sedan/IMG_1199.png', l:'Side Left' },
-    { f:'overlays/sedan/IMG_1200.png', l:'Front' },
-    { f:'overlays/sedan/IMG_1201.png', l:'Side Right' },
-    { f:'overlays/sedan/IMG_1202.png', l:'Front Left 45' },
-    { f:'overlays/sedan/IMG_1203.png', l:'Rear Side' },
-    { f:'overlays/sedan/IMG_1204.png', l:'Rear' },
-    { f:'overlays/sedan/IMG_1205.png', l:'Top' },
-    { f:'overlays/sedan/IMG_1207-Photoroom.png', l:'Front Right 45' }
+    { f:'overlays/sedan/IMG_1199.png', l:'Lateral Izq' },
+    { f:'overlays/sedan/IMG_1200.png', l:'Frontal' },
+    { f:'overlays/sedan/IMG_1201.png', l:'Lateral Der' },
+    { f:'overlays/sedan/IMG_1202.png', l:'Frontal Izq 45' },
+    { f:'overlays/sedan/IMG_1203.png', l:'Trasera Lateral' },
+    { f:'overlays/sedan/IMG_1204.png', l:'Trasera' },
+    { f:'overlays/sedan/IMG_1205.png', l:'Superior' },
+    { f:'overlays/sedan/IMG_1207-Photoroom.png', l:'Frontal Der 45' }
   ],
   suv: [
-    { f:'overlays/suv/IMG_1212.png', l:'Side Left' },
-    { f:'overlays/suv/IMG_1213.png', l:'Front' },
-    { f:'overlays/suv/IMG_1214.png', l:'Side Right' },
-    { f:'overlays/suv/IMG_1215.png', l:'Rear Side' },
-    { f:'overlays/suv/IMG_1216.png', l:'Rear' },
-    { f:'overlays/suv/IMG_1217.png', l:'Top' }
+    { f:'overlays/suv/IMG_1212.png', l:'Lateral Izq' },
+    { f:'overlays/suv/IMG_1213.png', l:'Frontal' },
+    { f:'overlays/suv/IMG_1214.png', l:'Lateral Der' },
+    { f:'overlays/suv/IMG_1215.png', l:'Trasera Lateral' },
+    { f:'overlays/suv/IMG_1216.png', l:'Trasera' },
+    { f:'overlays/suv/IMG_1217.png', l:'Superior' }
   ],
   truck: [
-    { f:'overlays/truck/IMG_1218.png', l:'Side Left' },
-    { f:'overlays/truck/IMG_1219.png', l:'Front' },
-    { f:'overlays/truck/IMG_1220.png', l:'Side Right' },
-    { f:'overlays/truck/IMG_1221.png', l:'Front Left 45' },
-    { f:'overlays/truck/IMG_1222.png', l:'Rear Side' },
-    { f:'overlays/truck/IMG_1223.png', l:'Rear' },
-    { f:'overlays/truck/IMG_1224.png', l:'Top' },
-    { f:'overlays/truck/IMG_1225.png', l:'Front Right 45' }
+    { f:'overlays/truck/IMG_1218.png', l:'Lateral Izq' },
+    { f:'overlays/truck/IMG_1219.png', l:'Frontal' },
+    { f:'overlays/truck/IMG_1220.png', l:'Lateral Der' },
+    { f:'overlays/truck/IMG_1221.png', l:'Frontal Izq 45' },
+    { f:'overlays/truck/IMG_1222.png', l:'Trasera Lateral' },
+    { f:'overlays/truck/IMG_1223.png', l:'Trasera' },
+    { f:'overlays/truck/IMG_1224.png', l:'Superior' },
+    { f:'overlays/truck/IMG_1225.png', l:'Frontal Der 45' }
   ],
   interior: [
-    { f:'overlays/interior/IMG_1226.png', l:'Dashboard' },
-    { f:'overlays/interior/IMG_1227.png', l:'Steering' },
-    { f:'overlays/interior/IMG_1228.png', l:'Center Console' },
-    { f:'overlays/interior/IMG_1229.png', l:'Rear Seats' },
-    { f:'overlays/interior/IMG_1230.png', l:'Cargo' },
-    { f:'overlays/interior/IMG_1231.png', l:'Door Panel' },
-    { f:'overlays/interior/IMG_1232.png', l:'Gauges' }
+    { f:'overlays/interior/IMG_1226.png', l:'Tablero' },
+    { f:'overlays/interior/IMG_1227.png', l:'Volante' },
+    { f:'overlays/interior/IMG_1228.png', l:'Consola Central' },
+    { f:'overlays/interior/IMG_1229.png', l:'Asientos Traseros' },
+    { f:'overlays/interior/IMG_1230.png', l:'Maletero' },
+    { f:'overlays/interior/IMG_1231.png', l:'Panel Puerta' },
+    { f:'overlays/interior/IMG_1232.png', l:'Indicadores' }
   ]
 };
 
@@ -549,7 +549,7 @@ function startCam() {
     var err = q('perm-err');
     err.style.display = 'block';
     if (e.name === 'NotAllowedError') {
-      err.textContent = 'Camera denied. Allow in settings and reload.';
+      err.textContent = 'Cámara denegada. Permite el acceso en ajustes y recarga.';
     } else {
       err.textContent = 'Error: ' + e.message;
     }
@@ -583,7 +583,7 @@ function onCamSuccess(stream) {
 function flipCam() {
   S.face = (S.face === 'environment') ? 'user' : 'environment';
   startCam();
-  toast(S.face === 'environment' ? 'Rear camera' : 'Front camera');
+  toast(S.face === 'environment' ? 'Cámara trasera' : 'Cámara frontal');
 }
 
 // Category
@@ -633,7 +633,7 @@ function pickShot(i) {
 function syncLandPanels() {
   // LEFT: category buttons
   var cats = ['sedan', 'suv', 'truck', 'interior'];
-  var labels = { sedan:'Sedan', suv:'SUV', truck:'Truck', interior:'Interior' };
+  var labels = { sedan:'Sedán', suv:'SUV', truck:'Camioneta', interior:'Interior' };
   var leftHtml = '';
   for (var c = 0; c < cats.length; c++) {
     var cls = cats[c] === S.cat ? ' active' : '';
@@ -679,7 +679,7 @@ function capture() {
 
   // Show captured state
   setAlignState('captured');
-  q('align-txt').textContent = '✓ Captured!';
+  q('align-txt').textContent = '✓ ¡Capturada!';
   q('hold-progress').classList.remove('visible');
 
   setTimeout(function() {
@@ -725,15 +725,15 @@ var A = {
 
 // Load the AI model
 function loadDetectionModel() {
-  q('align-txt').textContent = '🧠 Loading AI...';
+  q('align-txt').textContent = '🧠 Cargando IA...';
   q('align-txt').className = 'align-badge seeking';
   q('align-arrows').innerHTML = '';
 
   // Guard: make sure cocoSsd global exists (CDN loaded)
   if (typeof cocoSsd === 'undefined') {
     console.error('cocoSsd global not found — CDN script may not have loaded');
-    q('align-txt').textContent = 'Align manually';
-    q('align-sub').textContent = 'AI library not available';
+    q('align-txt').textContent = 'Alinear manualmente';
+    q('align-sub').textContent = 'Biblioteca de IA no disponible';
     startMotionOnlyDetection();
     return;
   }
@@ -742,15 +742,15 @@ function loadDetectionModel() {
     A.model = model;
     A.modelReady = true;
     A._firstDetection = true; // flag to toast on first detection
-    q('align-txt').textContent = 'Point at vehicle';
-    q('align-sub').textContent = 'AI is ready — find the car!';
-    toast('🧠 AI loaded');
+    q('align-txt').textContent = 'Apunta al vehículo';
+    q('align-sub').textContent = 'IA lista — ¡busca el auto!';
+    toast('🧠 IA cargada');
     startVehicleDetection();
   }).catch(function(err) {
     console.error('COCO-SSD load failed:', err);
     A.modelReady = false;
-    q('align-txt').textContent = 'Align manually';
-    q('align-sub').textContent = 'AI unavailable — ' + (err.message || 'load error');
+    q('align-txt').textContent = 'Alinear manualmente';
+    q('align-sub').textContent = 'IA no disponible — ' + (err.message || 'error de carga');
     // Fall back to motion-only detection
     startMotionOnlyDetection();
   });
@@ -765,9 +765,9 @@ function resetAlign() {
   S.autoCapturing = false;
   setAlignState('seeking');
   if (A.modelReady) {
-    q('align-txt').textContent = 'Point at vehicle';
+    q('align-txt').textContent = 'Apunta al vehículo';
   } else {
-    q('align-txt').textContent = 'Align the camera';
+    q('align-txt').textContent = 'Alinea la cámara';
   }
   q('align-arrows').innerHTML = '';
   q('hold-progress').classList.remove('visible');
@@ -904,15 +904,15 @@ function buildArrowsHTML(hints) {
 
 // Build hint text from directional hints
 function buildHintText(hints) {
-  if (!hints || hints.length === 0) return 'Align the camera';
+  if (!hints || hints.length === 0) return 'Alinea la cámara';
   var texts = [];
   for (var i = 0; i < hints.length; i++) {
-    if (hints[i] === 'left') texts.push('Move left');
-    if (hints[i] === 'right') texts.push('Move right');
-    if (hints[i] === 'up') texts.push('Move up');
-    if (hints[i] === 'down') texts.push('Move down');
-    if (hints[i] === 'closer') texts.push('Move closer');
-    if (hints[i] === 'back') texts.push('Step back');
+    if (hints[i] === 'left') texts.push('Mover izquierda');
+    if (hints[i] === 'right') texts.push('Mover derecha');
+    if (hints[i] === 'up') texts.push('Mover arriba');
+    if (hints[i] === 'down') texts.push('Mover abajo');
+    if (hints[i] === 'closer') texts.push('Acércate');
+    if (hints[i] === 'back') texts.push('Aléjate');
   }
   return texts.slice(0, 2).join(' · ');
 }
@@ -957,8 +957,8 @@ function detectVehicle() {
         if (sinceLastChange < A.debounceMs) return;
         A.lastStateChange = now;
         setAlignState('seeking');
-        q('align-txt').textContent = isInterior ? 'Point at interior' : 'Find the vehicle';
-        q('align-sub').textContent = 'No ' + (isInterior ? 'object' : 'vehicle') + ' detected';
+        q('align-txt').textContent = isInterior ? 'Apunta al interior' : 'Busca el vehículo';
+        q('align-sub').textContent = 'No se detectó ' + (isInterior ? 'objeto' : 'vehículo');
         q('align-arrows').innerHTML = '';
         q('hold-progress').classList.remove('visible');
         A.steadyStart = 0;
@@ -974,7 +974,7 @@ function detectVehicle() {
     // Notify user on first successful detection
     if (A._firstDetection) {
       A._firstDetection = false;
-      toast('🚗 ' + best.class + ' detected (' + Math.round(best.score*100) + '%)');
+      toast('🚗 ' + best.class + ' detectado (' + Math.round(best.score*100) + '%)');
     }
 
     // Smooth the score
@@ -990,7 +990,7 @@ function detectVehicle() {
         if (sinceLastChange < A.debounceMs) return;
         A.lastStateChange = now;
         setAlignState('locked');
-        q('align-txt').textContent = '● Hold still...';
+        q('align-txt').textContent = '● No te muevas...';
         q('align-arrows').innerHTML = '✓';
         q('hold-progress').classList.add('visible');
         A.steadyStart = now;
@@ -1016,9 +1016,9 @@ function detectVehicle() {
         A.steadyStart = 0;
         setProgress(0);
       }
-      q('align-txt').textContent = 'Almost there...';
+      q('align-txt').textContent = '¡Casi listo!';
       q('align-arrows').innerHTML = buildArrowsHTML(match.hints);
-      q('align-sub').textContent = buildHintText(match.hints) || 'Fine-tune position';
+      q('align-sub').textContent = buildHintText(match.hints) || 'Ajusta la posición';
     } else {
       // Vehicle found but not aligned — red with directional guidance
       if (A.state !== 'seeking') {
@@ -1026,9 +1026,9 @@ function detectVehicle() {
         A.lastStateChange = now;
       }
       setAlignState('seeking');
-      q('align-txt').textContent = buildHintText(match.hints) || 'Adjust position';
+      q('align-txt').textContent = buildHintText(match.hints) || 'Ajusta la posición';
       q('align-arrows').innerHTML = buildArrowsHTML(match.hints);
-      q('align-sub').textContent = (best.class === 'car' ? 'Car' : best.class) + ' detected — adjust framing';
+      q('align-sub').textContent = (best.class === 'car' ? 'Auto' : best.class) + ' detectado — ajusta el encuadre';
       q('hold-progress').classList.remove('visible');
       A.steadyStart = 0;
       setProgress(0);
@@ -1096,7 +1096,7 @@ function onDeviceMotionFallbackOnly(e) {
       if (sinceLastChange < 400) return;
       A.lastStateChange = now;
       setAlignState('locked');
-      q('align-txt').textContent = '● Hold still...';
+      q('align-txt').textContent = '● No te muevas...';
       q('hold-progress').classList.add('visible');
       A.steadyStart = now;
     }
@@ -1113,7 +1113,7 @@ function onDeviceMotionFallbackOnly(e) {
       if (sinceLastChange < 400) return;
       A.lastStateChange = now;
       setAlignState('close');
-      q('align-txt').textContent = 'Almost there...';
+      q('align-txt').textContent = '¡Casi listo!';
       q('hold-progress').classList.remove('visible');
       A.steadyStart = 0; setProgress(0);
     }
@@ -1122,7 +1122,7 @@ function onDeviceMotionFallbackOnly(e) {
       if (sinceLastChange < 400) return;
       A.lastStateChange = now;
       setAlignState('seeking');
-      q('align-txt').textContent = 'Hold steady';
+      q('align-txt').textContent = 'Mantén firme';
       q('hold-progress').classList.remove('visible');
       A.steadyStart = 0; setProgress(0);
     }
@@ -1154,13 +1154,13 @@ function startFrameFallback() {
       var sinceLastChange = now - A.lastStateChange;
       if (A.state !== 'captured' && !S.autoCapturing) {
         if (jitter < 1.2) {
-          if (A.state !== 'locked') { if (sinceLastChange < 400) { prevFrame = new Uint8Array(data); A.rafId = requestAnimationFrame(checkFrame); return; } A.lastStateChange = now; setAlignState('locked'); q('align-txt').textContent = '● Hold still...'; q('hold-progress').classList.add('visible'); A.steadyStart = now; }
+          if (A.state !== 'locked') { if (sinceLastChange < 400) { prevFrame = new Uint8Array(data); A.rafId = requestAnimationFrame(checkFrame); return; } A.lastStateChange = now; setAlignState('locked'); q('align-txt').textContent = '● No te muevas...'; q('hold-progress').classList.add('visible'); A.steadyStart = now; }
           var elapsed = now - A.steadyStart; var pct = Math.min(elapsed / A.holdTime, 1); setProgress(pct);
           if (pct >= 1 && !S.autoCapturing) { S.autoCapturing = true; capture(); }
         } else if (jitter < 3.0) {
-          if (A.state !== 'close') { if (sinceLastChange < 400) { prevFrame = new Uint8Array(data); A.rafId = requestAnimationFrame(checkFrame); return; } A.lastStateChange = now; setAlignState('close'); q('align-txt').textContent = 'Almost there...'; q('hold-progress').classList.remove('visible'); A.steadyStart = 0; setProgress(0); }
+          if (A.state !== 'close') { if (sinceLastChange < 400) { prevFrame = new Uint8Array(data); A.rafId = requestAnimationFrame(checkFrame); return; } A.lastStateChange = now; setAlignState('close'); q('align-txt').textContent = '¡Casi listo!'; q('hold-progress').classList.remove('visible'); A.steadyStart = 0; setProgress(0); }
         } else {
-          if (A.state !== 'seeking') { if (sinceLastChange < 400) { prevFrame = new Uint8Array(data); A.rafId = requestAnimationFrame(checkFrame); return; } A.lastStateChange = now; setAlignState('seeking'); q('align-txt').textContent = 'Hold steady'; q('hold-progress').classList.remove('visible'); A.steadyStart = 0; setProgress(0); }
+          if (A.state !== 'seeking') { if (sinceLastChange < 400) { prevFrame = new Uint8Array(data); A.rafId = requestAnimationFrame(checkFrame); return; } A.lastStateChange = now; setAlignState('seeking'); q('align-txt').textContent = 'Mantén firme'; q('hold-progress').classList.remove('visible'); A.steadyStart = 0; setProgress(0); }
         }
       }
     }
@@ -1192,7 +1192,7 @@ function updGal() {
 function showGal() {
   q('gallery').classList.add('visible');
   if (S.photos.length === 0) {
-    q('g-grid').innerHTML = '<div class="ge">No photos yet</div>';
+    q('g-grid').innerHTML = '<div class="ge">Sin fotos aún</div>';
   } else {
     var html = '';
     for (var i = 0; i < S.photos.length; i++) {
@@ -1211,7 +1211,7 @@ function dlP(i) {
   a.href = p.url;
   a.download = p.label.replace(/\s+/g, '_') + '_' + Date.now() + '.jpg';
   a.click();
-  toast('Saved');
+  toast('Guardada');
 }
 
 function toast(m) {
@@ -1226,7 +1226,7 @@ function toggleFS() {
     if (el.requestFullscreen) {
       el.requestFullscreen({ navigationUI: 'hide' }).then(function() {
         setTimeout(fixViewport, 100);
-        toast('Fullscreen');
+        toast('Pantalla completa');
       }).catch(function(){
         // iOS fallback: try video fullscreen
         var v = q('video');
@@ -1263,7 +1263,7 @@ q('cap').onclick = capture;
 q('gp').onclick = showGal;
 q('g-back').onclick = function() { q('gallery').classList.remove('visible'); };
 q('g-clear').onclick = function() {
-  if (confirm('Clear all photos?')) { S.photos = []; updGal(); showGal(); toast('Cleared'); }
+  if (confirm('¿Borrar todas las fotos?')) { S.photos = []; updGal(); showGal(); toast('Borradas'); }
 };
 
 q('tabs').onclick = function(e) {
@@ -1396,12 +1396,12 @@ document.addEventListener('webkitfullscreenchange', function() {
 
   // iOS Safari: "Add to Home Screen" from share menu
   if (isSafariIOS && !isStandalone && !dismissed) {
-    showBanner('Go Fullscreen', 'Tap Share ↗ then "Add to Home Screen" for no browser bars!');
+    showBanner('Pantalla Completa', 'Toca Compartir ↗ y luego "Añadir a pantalla de inicio" para quitar las barras del navegador.');
   }
 
   // Chrome on iPhone: can't do fullscreen, suggest opening in Safari to add to home screen
   if (isChromeIOS && !isStandalone && !dismissed) {
-    showBanner('For best experience', 'Open in Safari → Share ↗ → "Add to Home Screen" for fullscreen mode. Or tap ⛶ to try fullscreen.');
+    showBanner('Para mejor experiencia', 'Abre en Safari → Compartir ↗ → "Añadir a pantalla de inicio" para modo pantalla completa. O toca ⛶ para probar.');
   }
 
   // Chrome Android: native install prompt
@@ -1409,7 +1409,7 @@ document.addEventListener('webkitfullscreenchange', function() {
     e.preventDefault();
     savedPrompt = e;
     if (!dismissed && !isStandalone) {
-      showBanner('Install App', 'Install for fullscreen with no browser bars!');
+      showBanner('Instalar App', 'Instala para pantalla completa sin barras del navegador.');
     }
   });
 
@@ -1441,14 +1441,14 @@ if ('serviceWorker' in navigator) {
   var isStandalone = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches || window.matchMedia('(display-mode: fullscreen)').matches;
 
   if (isStandalone) {
-    tip.textContent = '✓ Running in fullscreen mode';
+    tip.textContent = '✓ Ejecutándose en pantalla completa';
     tip.style.color = 'rgba(100,255,100,0.5)';
   } else if (isChromeIOS) {
-    tip.textContent = 'Tip: Open in Safari → Add to Home Screen for fullscreen';
+    tip.textContent = 'Consejo: Abre en Safari → Añadir a pantalla de inicio para pantalla completa';
   } else if (isIOS) {
-    tip.textContent = 'Tip: Add to Home Screen for fullscreen (no bars)';
+    tip.textContent = 'Consejo: Añadir a pantalla de inicio para pantalla completa (sin barras)';
   } else {
-    tip.textContent = 'Opens in fullscreen';
+    tip.textContent = 'Se abre en pantalla completa';
   }
 })();
 </script>
