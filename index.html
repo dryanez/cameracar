@@ -11,12 +11,16 @@
   <link rel="manifest" href="manifest.json">
   <style>
     * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-    html { height:100%; height:100dvh; overflow:hidden; }
+    html { height:100%; }
     body {
-      width:100%; min-height:100vh; min-height:100dvh;
-      overflow:hidden; background:#000;
+      width:100%;
+      /* MUST be taller than viewport so Safari scroll-to-hide works */
+      min-height: calc(100vh + 1px);
+      min-height: calc(100dvh + 1px);
+      background:#000;
       font-family:-apple-system,BlinkMacSystemFont,'SF Pro','Helvetica Neue',sans-serif;
       color:#fff; touch-action:manipulation;
+      -webkit-overflow-scrolling:touch;
     }
 
     /* ===== PERMISSION ===== */
@@ -551,17 +555,41 @@ window.addEventListener('orientationchange', function() {
   setTimeout(fixViewport, 100);
   setTimeout(fixViewport, 300);
   setTimeout(fixViewport, 500);
+  hideSafariBar();
 });
 
 // Initial
 fixViewport();
+hideSafariBar();
 
-// Scroll trick: scrolling slightly hides Safari's address bar on iOS
+// Scroll trick: scrolling down hides Safari's address bar on iOS
+// Requires body to be taller than viewport (min-height: calc(100vh + 1px))
 function hideSafariBar() {
   if (window.navigator.standalone) return;
-  setTimeout(function() { window.scrollTo(0, 1); }, 100);
+  // Multiple attempts with increasing delays for reliability
+  setTimeout(function() { window.scrollTo(0, 1); }, 50);
+  setTimeout(function() { window.scrollTo(0, 1); }, 150);
   setTimeout(function() { window.scrollTo(0, 1); }, 300);
+  setTimeout(function() { window.scrollTo(0, 1); }, 600);
+  setTimeout(function() { window.scrollTo(0, 1); fixViewport(); }, 800);
 }
+
+// Re-trigger scroll trick whenever user taps the camera area
+// (Safari shows toolbar again on tap sometimes)
+document.addEventListener('touchstart', function(e) {
+  // Only auto-scroll if camera is visible and Safari bar might be showing
+  var cam = q('cam');
+  if (cam && !cam.classList.contains('hidden') && window.scrollY === 0) {
+    setTimeout(function() { window.scrollTo(0, 1); }, 50);
+  }
+}, { passive: true });
+
+// Also re-trigger on any touch end
+document.addEventListener('touchend', function() {
+  if (window.scrollY === 0 && !window.navigator.standalone) {
+    setTimeout(function() { window.scrollTo(0, 1); }, 100);
+  }
+}, { passive: true });
 
 // ===== FULLSCREEN ON CAMERA START =====
 var origStartCam = startCam;
