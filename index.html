@@ -106,32 +106,91 @@
     /* ===== LANDSCAPE MODE (PHONE) ===== */
     @media (orientation: landscape) {
       #ghost img {
-        height: calc(var(--app-h, 100vh) * 0.75);
-        width: 50%;
-        margin-top: -20px;
+        height: calc(var(--app-h, 100vh) * 0.85);
+        width: 55%;
+        margin-top: 0;
       }
       #align-frame {
-        width: 45%; height: calc(var(--app-h, 100vh) * 0.65);
-        transform: translate(-50%, -55%);
+        width: 50%; height: calc(var(--app-h, 100vh) * 0.75);
+        transform: translate(-50%, -52%);
       }
       .top-bar { padding-top:4px !important; padding-bottom:2px; }
       .top-close { font-size:20px; }
       .top-right { flex-direction:row; gap:6px; }
       .top-icon-btn { font-size:16px; padding:4px; }
-      /* Keep bottom panel at bottom, just shrink everything */
-      .bottom-panel { padding-bottom:max(env(safe-area-inset-bottom,4px),4px) !important; }
-      .cat-tabs { padding:2px 8px 0; }
-      .cat-tab { padding:3px 12px; font-size:11px; }
-      .shot-carousel { padding:4px 10px; gap:6px; }
-      .shot-thumb { width:32px; height:32px; padding:3px; }
-      .shot-thumb.active { width:40px; height:40px; }
-      .capture-row { padding:2px 16px 2px; gap:16px; }
-      .cap-btn { width:46px; height:46px; border-width:3px; }
+
+      /* Bottom panel becomes a thin center strip with just capture + gallery */
+      .bottom-panel {
+        position:absolute; bottom:0; left:50%; right:auto; top:auto;
+        transform:translateX(-50%);
+        width:auto; background:transparent !important;
+        padding:0 0 max(env(safe-area-inset-bottom,4px),4px) !important;
+        display:flex; flex-direction:column; align-items:center;
+        z-index:20;
+      }
+
+      /* Hide carousel and tabs from bottom panel — they go to side panels */
+      .shot-carousel { display:none !important; }
+      .cat-tabs { display:none !important; }
+
+      .capture-row { padding:2px 0; gap:14px; }
+      .cap-btn { width:52px; height:52px; border-width:3px; }
       .cap-btn::after { inset:3px; }
-      .gallery-preview, .side-btn { width:30px; height:30px; font-size:14px; }
-      .gallery-preview { border-radius:6px; }
+      .gallery-preview { width:34px; height:34px; border-radius:8px; }
+      .side-btn { width:34px; height:34px; font-size:14px; }
       .gal-badge { width:14px; height:14px; font-size:8px; top:-3px; right:-3px; }
-      .align-prompt { bottom:140px; }
+
+      /* LEFT SIDE PANEL — category tabs */
+      .land-left {
+        display:flex !important;
+        position:absolute; left:0; top:50%;
+        transform:translateY(-50%);
+        z-index:25;
+        flex-direction:column; align-items:center; gap:2px;
+        padding:6px 4px;
+        background:linear-gradient(to right, rgba(0,0,0,0.7) 60%, transparent 100%);
+        border-radius:0 12px 12px 0;
+      }
+      .land-left .lt-btn {
+        writing-mode:horizontal-tb;
+        background:none; border:none; color:rgba(255,255,255,0.45);
+        font-size:11px; font-weight:500; cursor:pointer;
+        padding:8px 10px; white-space:nowrap; position:relative;
+        border-radius:8px; transition:all 0.2s;
+      }
+      .land-left .lt-btn.active {
+        color:#e74c3c; font-weight:700;
+        background:rgba(231,76,60,0.12);
+      }
+
+      /* RIGHT SIDE PANEL — shot thumbnails */
+      .land-right {
+        display:flex !important;
+        position:absolute; right:0; top:50%;
+        transform:translateY(-50%);
+        z-index:25;
+        flex-direction:column; align-items:center; gap:5px;
+        padding:6px 5px;
+        background:linear-gradient(to left, rgba(0,0,0,0.7) 60%, transparent 100%);
+        border-radius:12px 0 0 12px;
+        max-height: calc(var(--app-h, 100vh) - 40px);
+        overflow-y:auto; scrollbar-width:none;
+      }
+      .land-right::-webkit-scrollbar { display:none; }
+      .land-right .lr-thumb {
+        flex-shrink:0; width:36px; height:36px; border-radius:50%;
+        background:#1c1c1e; border:2px solid rgba(255,255,255,0.12);
+        overflow:hidden; cursor:pointer; transition:all 0.2s;
+        display:flex; align-items:center; justify-content:center; padding:3px;
+      }
+      .land-right .lr-thumb img { width:100%; height:100%; object-fit:contain; filter:brightness(0.6) saturate(0.5); transition:filter 0.2s; }
+      .land-right .lr-thumb.active {
+        width:44px; height:44px; border:2px solid #fff;
+        box-shadow:0 0 0 2px rgba(255,255,255,0.12);
+      }
+      .land-right .lr-thumb.active img { filter:brightness(1) saturate(1); }
+
+      .align-prompt { bottom:80px; }
       .align-badge { padding:6px 16px; font-size:12px; }
       .align-arrow { font-size:18px; }
       .align-sub { font-size:11px; }
@@ -141,16 +200,13 @@
     @media (orientation: landscape) and (max-height: 400px) {
       .top-bar { padding:2px 10px !important; }
       .top-close { font-size:18px; }
-      #ghost img { height: calc(var(--app-h, 100vh) * 0.80); width: 45%; margin-top: -10px; }
-      .shot-carousel { padding:2px 8px; gap:4px; }
-      .shot-thumb { width:26px; height:26px; padding:2px; }
-      .shot-thumb.active { width:34px; height:34px; }
-      .capture-row { padding:1px 12px; gap:12px; }
-      .cap-btn { width:38px; height:38px; }
-      .cat-tabs { padding:1px 6px 0; }
-      .cat-tab { font-size:10px; padding:2px 8px; }
-      .gallery-preview, .side-btn { width:26px; height:26px; }
-      .align-prompt { bottom:110px; }
+      #ghost img { height: calc(var(--app-h, 100vh) * 0.88); width: 50%; margin-top: 0; }
+      .cap-btn { width:42px; height:42px; }
+      .gallery-preview, .side-btn { width:28px; height:28px; }
+      .land-left .lt-btn { font-size:10px; padding:6px 8px; }
+      .land-right .lr-thumb { width:30px; height:30px; padding:2px; }
+      .land-right .lr-thumb.active { width:38px; height:38px; }
+      .align-prompt { bottom:65px; }
     }
 
     /* ===== TOP BAR ===== */
@@ -352,6 +408,10 @@
     </div>
   </div>
 
+  <!-- LANDSCAPE SIDE PANELS (hidden in portrait, visible in landscape via CSS) -->
+  <div class="land-left" id="land-left" style="display:none;"></div>
+  <div class="land-right" id="land-right" style="display:none;"></div>
+
   <div class="flash-screen" id="flash"></div>
 </div>
 
@@ -486,6 +546,9 @@ function onCamSuccess(stream) {
     }
   }
 
+  // Build landscape side panels
+  syncLandPanels();
+
   // Start motion detection for alignment feedback
   startMotionDetection();
 }
@@ -513,6 +576,7 @@ function loadCat(cat) {
     html += '</div>';
   }
   q('shots').innerHTML = html;
+  syncLandPanels();
   pickShot(0);
 }
 
@@ -526,10 +590,53 @@ function pickShot(i) {
     if (j === i) { thumbs[j].classList.add('active'); }
     else { thumbs[j].classList.remove('active'); }
   }
+  // Sync landscape right-panel active state
+  var lrThumbs = document.querySelectorAll('.lr-thumb');
+  for (var j = 0; j < lrThumbs.length; j++) {
+    if (j === i) { lrThumbs[j].classList.add('active'); }
+    else { lrThumbs[j].classList.remove('active'); }
+  }
   // Reset alignment state
   resetAlign();
   q('align-sub').textContent = shots[i].l;
 }
+
+// ===== LANDSCAPE SIDE PANELS =====
+// Builds left (categories) and right (shots) panels for landscape mode
+function syncLandPanels() {
+  // LEFT: category buttons
+  var cats = ['sedan', 'suv', 'truck', 'interior'];
+  var labels = { sedan:'Sedan', suv:'SUV', truck:'Truck', interior:'Interior' };
+  var leftHtml = '';
+  for (var c = 0; c < cats.length; c++) {
+    var cls = cats[c] === S.cat ? ' active' : '';
+    leftHtml += '<button class="lt-btn' + cls + '" data-cat="' + cats[c] + '">' + labels[cats[c]] + '</button>';
+  }
+  q('land-left').innerHTML = leftHtml;
+
+  // RIGHT: shot thumbnails for current category
+  var shots = OV[S.cat];
+  var rightHtml = '';
+  for (var i = 0; i < shots.length; i++) {
+    var cls = i === S.idx ? ' active' : '';
+    rightHtml += '<div class="lr-thumb' + cls + '" data-i="' + i + '">';
+    rightHtml += '<img src="' + shots[i].f + '" alt="' + shots[i].l + '">';
+    rightHtml += '</div>';
+  }
+  q('land-right').innerHTML = rightHtml;
+}
+
+// Event delegation for landscape side panels
+q('land-left').onclick = function(e) {
+  var t = e.target;
+  while (t && !t.classList.contains('lt-btn')) t = t.parentElement;
+  if (t && t.dataset.cat) loadCat(t.dataset.cat);
+};
+q('land-right').onclick = function(e) {
+  var t = e.target;
+  while (t && !t.classList.contains('lr-thumb')) t = t.parentElement;
+  if (t && t.dataset.i !== undefined) pickShot(parseInt(t.dataset.i));
+};
 
 // Capture
 function capture() {
@@ -567,19 +674,23 @@ function capture() {
 var A = {
   state: 'seeking',     // seeking | close | locked | captured
   steadyStart: 0,       // timestamp when phone became steady
-  holdTime: 1500,       // ms to hold still before auto-capture
+  holdTime: 2000,       // ms to hold still before auto-capture
   motionSamples: [],    // recent acceleration samples
-  sampleSize: 8,        // number of samples to average
-  thresholdClose: 3.0,  // motion below this = "close" (getting steady)
-  thresholdLock: 0.8,   // motion below this = "locked" (hold still)
+  sampleSize: 20,       // more samples = smoother averaging
+  thresholdClose: 6.0,  // motion below this = "close" (getting steady)
+  thresholdLock: 3.0,   // motion below this = "locked" (hold still) — hand-friendly
   autoCapturing: false,
-  rafId: null
+  rafId: null,
+  lastStateChange: 0,   // debounce rapid state flipping
+  debounceMs: 400       // min ms between state changes
 };
 
 function resetAlign() {
   A.state = 'seeking';
   A.steadyStart = 0;
   A.autoCapturing = false;
+  A.lastStateChange = 0;
+  A.motionSamples = [];
   S.autoCapturing = false;
   setAlignState('seeking');
   q('align-txt').textContent = 'Align the camera';
@@ -633,10 +744,13 @@ function onDeviceMotion(e) {
   if (A.state === 'captured' || S.autoCapturing) return;
 
   var now = Date.now();
+  var sinceLastChange = now - A.lastStateChange;
 
   if (jitter < A.thresholdLock && A.motionSamples.length >= A.sampleSize) {
     // Very steady — locked!
     if (A.state !== 'locked') {
+      if (sinceLastChange < A.debounceMs) return; // debounce
+      A.lastStateChange = now;
       setAlignState('locked');
       q('align-txt').textContent = '● Hold still...';
       q('hold-progress').classList.add('visible');
@@ -658,6 +772,8 @@ function onDeviceMotion(e) {
   } else if (jitter < A.thresholdClose) {
     // Getting close — yellow
     if (A.state !== 'close') {
+      if (sinceLastChange < A.debounceMs) return; // debounce
+      A.lastStateChange = now;
       setAlignState('close');
       q('align-txt').textContent = 'Almost there...';
       q('hold-progress').classList.remove('visible');
@@ -667,6 +783,8 @@ function onDeviceMotion(e) {
   } else {
     // Too much movement — red
     if (A.state !== 'seeking') {
+      if (sinceLastChange < A.debounceMs) return; // debounce
+      A.lastStateChange = now;
       setAlignState('seeking');
       q('align-txt').textContent = 'Align the camera';
       q('hold-progress').classList.remove('visible');
@@ -753,10 +871,13 @@ function onDeviceMotionFallback(jitter) {
   if (A.state === 'captured' || S.autoCapturing) return;
 
   var now = Date.now();
+  var sinceLastChange = now - A.lastStateChange;
 
-  if (jitter < 0.5) {
+  if (jitter < 1.2) {
     // Very steady
     if (A.state !== 'locked') {
+      if (sinceLastChange < A.debounceMs) return;
+      A.lastStateChange = now;
       setAlignState('locked');
       q('align-txt').textContent = '● Hold still...';
       q('hold-progress').classList.add('visible');
@@ -771,8 +892,10 @@ function onDeviceMotionFallback(jitter) {
       if (navigator.vibrate) navigator.vibrate([40, 30, 40]);
       capture();
     }
-  } else if (jitter < 1.5) {
+  } else if (jitter < 3.0) {
     if (A.state !== 'close') {
+      if (sinceLastChange < A.debounceMs) return;
+      A.lastStateChange = now;
       setAlignState('close');
       q('align-txt').textContent = 'Almost there...';
       q('hold-progress').classList.remove('visible');
@@ -781,6 +904,8 @@ function onDeviceMotionFallback(jitter) {
     }
   } else {
     if (A.state !== 'seeking') {
+      if (sinceLastChange < A.debounceMs) return;
+      A.lastStateChange = now;
       setAlignState('seeking');
       q('align-txt').textContent = 'Align the camera';
       q('hold-progress').classList.remove('visible');
