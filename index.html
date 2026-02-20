@@ -107,6 +107,8 @@
     .prog-fg { stroke:rgba(40,220,80,0.9); stroke-dasharray:251.3; stroke-dashoffset:251.3; stroke-linecap:round; transition:stroke-dashoffset 0.1s linear; }
 
     /* ===== LANDSCAPE MODE (PHONE) ===== */
+    /* Hide side panels in portrait */
+    .land-left, .land-right { display:none; }
     @media (orientation: landscape) {
       #ghost img {
         height: calc(var(--app-h, 100vh) * 0.85);
@@ -126,9 +128,10 @@
       .bottom-panel {
         position:absolute; bottom:0; left:50%; right:auto; top:auto;
         transform:translateX(-50%);
-        width:auto; background:transparent !important;
+        width:auto; min-width:160px; background:transparent !important;
         padding:0 0 max(env(safe-area-inset-bottom,4px),4px) !important;
         display:flex; flex-direction:column; align-items:center;
+        justify-content:center;
         z-index:20;
       }
 
@@ -136,7 +139,7 @@
       .shot-carousel { display:none !important; }
       .cat-tabs { display:none !important; }
 
-      .capture-row { padding:2px 0; gap:14px; }
+      .capture-row { padding:2px 0; gap:14px; justify-content:center; }
       .cap-btn { width:52px; height:52px; border-width:3px; }
       .cap-btn::after { inset:3px; }
       .gallery-preview { width:34px; height:34px; border-radius:8px; }
@@ -425,8 +428,8 @@
   </div>
 
   <!-- LANDSCAPE SIDE PANELS (hidden in portrait, visible in landscape via CSS) -->
-  <div class="land-left" id="land-left" style="display:none;"></div>
-  <div class="land-right" id="land-right" style="display:none;"></div>
+  <div class="land-left" id="land-left"></div>
+  <div class="land-right" id="land-right"></div>
 
   <div class="flash-screen" id="flash"></div>
 </div>
@@ -718,9 +721,19 @@ function loadDetectionModel() {
   q('align-txt').className = 'align-badge seeking';
   q('align-arrows').innerHTML = '';
 
+  // Guard: make sure cocoSsd global exists (CDN loaded)
+  if (typeof cocoSsd === 'undefined') {
+    console.error('cocoSsd global not found — CDN script may not have loaded');
+    q('align-txt').textContent = 'Align manually';
+    q('align-sub').textContent = 'AI library not available';
+    startMotionOnlyDetection();
+    return;
+  }
+
   cocoSsd.load({ base: 'lite_mobilenet_v2' }).then(function(model) {
     A.model = model;
     A.modelReady = true;
+    A._firstDetection = true; // flag to toast on first detection
     q('align-txt').textContent = 'Point at vehicle';
     q('align-sub').textContent = 'AI is ready — find the car!';
     toast('🧠 AI loaded');
@@ -729,7 +742,7 @@ function loadDetectionModel() {
     console.error('COCO-SSD load failed:', err);
     A.modelReady = false;
     q('align-txt').textContent = 'Align manually';
-    q('align-sub').textContent = 'AI unavailable — use overlay as guide';
+    q('align-sub').textContent = 'AI unavailable — ' + (err.message || 'load error');
     // Fall back to motion-only detection
     startMotionOnlyDetection();
   });
@@ -789,14 +802,40 @@ function getOverlayRect() {
 // Returns { score: 0-1, hints: ['left','up',...] }
 function calcPositionMatch(detection, overlayRect) {
   var v = q('video');
+  var vw = v.videoWidth;
+  var vh = v.videoHeight;
   var vRect = v.getBoundingClientRect();
 
-  // Detection bbox is [x, y, width, height] in pixel coords of the video element
+  // COCO-SSD detect() on a video element returns bbox in the video's natural
+  // coordinate space (videoWidth x videoHeight). We need to map these to the
+  // same normalised 0-1 space used by overlayRect, which is relative to the
+  // displayed CSS rect of the video element.
+  //
+  // Because the video uses object-fit:cover, there may be cropping. We need
+  // to compute the actual visible portion of the video inside the CSS rect.
+  var elemW = vRect.width;
+  var elemH = vRect.height;
+  var elemAR = elemW / elemH;
+  var vidAR = vw / vh;
+
+  // object-fit:cover scaling
+  var scale, offX = 0, offY = 0;
+  if (vidAR > elemAR) {
+    // video is wider than element — cropped on left/right
+    scale = elemH / vh;
+    offX = (vw * scale - elemW) / 2;
+  } else {
+    // video is taller — cropped on top/bottom
+    scale = elemW / vw;
+    offY = (vh * scale - elemH) / 2;
+  }
+
+  // Map detection bbox from video-pixel space to CSS-pixel space, then normalise
   var det = {
-    x: detection.bbox[0] / vRect.width,
-    y: detection.bbox[1] / vRect.height,
-    w: detection.bbox[2] / vRect.width,
-    h: detection.bbox[3] / vRect.height
+    x: (detection.bbox[0] * scale - offX) / elemW,
+    y: (detection.bbox[1] * scale - offY) / elemH,
+    w: (detection.bbox[2] * scale) / elemW,
+    h: (detection.bbox[3] * scale) / elemH
   };
   det.cx = det.x + det.w/2;
   det.cy = det.y + det.h/2;
@@ -885,7 +924,7 @@ function detectVehicle() {
   var validClasses = isInterior ? A.interiorClasses : A.vehicleClasses;
   var minScore = isInterior ? 0.25 : 0.30;
 
-  A.model.detect(v, 8).then(function(predictions) {
+  A.model.detect(v, 8, minScore).then(function(predictions) {
     A.detecting = false;
     if (A.state === 'captured' || S.autoCapturing) return;
 
@@ -923,6 +962,12 @@ function detectVehicle() {
     // We found a vehicle — check position
     var overlayRect = getOverlayRect();
     var match = calcPositionMatch(best, overlayRect);
+
+    // Notify user on first successful detection
+    if (A._firstDetection) {
+      A._firstDetection = false;
+      toast('🚗 ' + best.class + ' detected (' + Math.round(best.score*100) + '%)');
+    }
 
     // Smooth the score
     A.positionHistory.push(match.score);
