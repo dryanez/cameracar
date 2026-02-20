@@ -2,21 +2,25 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover, maximum-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover, maximum-scale=1, interactive-widget=resizes-content">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="theme-color" content="#000000">
   <title>Ghost Overlay Camera</title>
   <link rel="manifest" href="manifest.json">
   <style>
     * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-    html { height:100%; }
-    body { width:100%; height:100%; height:100dvh; overflow:hidden; background:#000; font-family:-apple-system,BlinkMacSystemFont,'SF Pro','Helvetica Neue',sans-serif; color:#fff; touch-action:none; overflow-y:scroll; -webkit-overflow-scrolling:touch; }
-    /* Force Safari to use real viewport */
-    html, body { position:fixed; inset:0; }
+    html { height:100%; height:100dvh; overflow:hidden; }
+    body {
+      width:100%; min-height:100vh; min-height:100dvh;
+      overflow:hidden; background:#000;
+      font-family:-apple-system,BlinkMacSystemFont,'SF Pro','Helvetica Neue',sans-serif;
+      color:#fff; touch-action:manipulation;
+    }
 
     /* ===== PERMISSION ===== */
-    #perm { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#000; z-index:100; padding:40px; text-align:center; }
+    #perm { position:fixed; top:0; left:0; right:0; bottom:0; width:100%; height:100vh; height:100dvh; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#000; z-index:100; padding:40px; text-align:center; }
     #perm.hidden { display:none; }
     .perm-icon { font-size:48px; margin-bottom:20px; }
     .perm-title { font-size:26px; font-weight:700; margin-bottom:10px; }
@@ -26,12 +30,12 @@
     #perm-err { color:#ff6b6b; margin-top:16px; font-size:13px; display:none; }
 
     /* ===== CAMERA ===== */
-    #cam { position:fixed; inset:0; background:#000; }
+    #cam { position:fixed; top:0; left:0; right:0; bottom:0; width:100%; height:100vh; height:100dvh; background:#000; }
     #cam.hidden { display:none; }
-    #video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+    #video { position:absolute; top:0; left:0; width:100%; height:100%; object-fit:cover; }
 
     /* ===== GHOST OVERLAY — BIG ===== */
-    #ghost { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; z-index:10; padding:0; }
+    #ghost { position:absolute; top:0; left:0; right:0; bottom:0; display:flex; align-items:center; justify-content:center; pointer-events:none; z-index:10; padding:0; }
     #ghost img {
       width: 100%;
       height: 72vh;
@@ -43,35 +47,52 @@
       margin-top: -60px;
     }
 
-    /* ===== LANDSCAPE MODE ===== */
+    /* ===== LANDSCAPE MODE (PHONE) ===== */
     @media (orientation: landscape) {
       #ghost img {
-        height: 85vh;
-        height: 85dvh;
-        width: 70%;
+        height: 80vh;
+        height: 80dvh;
+        width: 60%;
         margin-top: 0;
       }
-      .top-bar { padding-top:8px !important; }
-      .top-right { flex-direction:row; gap:10px; }
-      .bottom-panel { background:linear-gradient(to top, rgba(0,0,0,0.95) 70%, transparent 100%); }
-      .shot-carousel { padding:6px 12px 6px; gap:8px; }
-      .shot-thumb { width:42px; height:42px; }
-      .shot-thumb.active { width:54px; height:54px; }
-      .capture-row { padding:2px 16px 4px; gap:20px; }
-      .cap-btn { width:56px; height:56px; }
-      .cat-tabs { padding:4px 8px 0; }
-      .cat-tab { padding:4px 14px; font-size:12px; }
-      .align-prompt { bottom:200px; }
-      .align-badge { padding:8px 20px; font-size:14px; }
-      .gallery-preview, .side-btn { width:36px; height:36px; }
-      /* Hide Safari bar area */
-      .top-bar { padding-top: max(env(safe-area-inset-top, 4px), 8px) !important; }
+      .top-bar { padding-top:4px !important; padding-bottom:4px; }
+      .top-close { font-size:22px; }
+      .top-right { flex-direction:row; gap:8px; }
+      .top-icon-btn { font-size:18px; }
+      .bottom-panel {
+        position:absolute; bottom:0; right:0; left:auto; width:auto;
+        background:linear-gradient(to left, rgba(0,0,0,0.9) 70%, transparent 100%);
+        display:flex; flex-direction:column; align-items:center;
+        padding:4px 8px; padding-right:max(env(safe-area-inset-right, 4px), 8px);
+        height:100%; justify-content:flex-end;
+      }
+      .cat-tabs { flex-direction:column; padding:2px 0; gap:0; }
+      .cat-tab { padding:3px 10px; font-size:11px; }
+      .shot-carousel { flex-direction:column; padding:4px 4px; gap:4px; max-height:45vh; overflow-y:auto; }
+      .shot-thumb { width:36px; height:36px; }
+      .shot-thumb.active { width:44px; height:44px; }
+      .capture-row { flex-direction:column; padding:4px 0; gap:8px; }
+      .cap-btn { width:50px; height:50px; border-width:3px; }
+      .gallery-preview, .side-btn { width:32px; height:32px; }
+      .align-prompt { bottom:auto; top:50%; transform:translateY(-50%); left:10%; right:auto; }
+      .align-badge { padding:6px 14px; font-size:13px; }
+      .align-arrow { font-size:20px; }
+    }
+
+    /* Extra compact for very short phones in landscape (height < 400px) */
+    @media (orientation: landscape) and (max-height: 400px) {
+      .top-bar { display:none; }
+      #ghost img { height: 90vh; height: 90dvh; width: 55%; }
+      .cap-btn { width:44px; height:44px; }
+      .shot-thumb { width:30px; height:30px; }
+      .shot-thumb.active { width:38px; height:38px; }
+      .cat-tab { font-size:10px; padding:2px 8px; }
     }
 
     /* ===== TOP BAR ===== */
     .top-bar {
       position:absolute; top:0; left:0; right:0;
-      padding: max(env(safe-area-inset-top,16px),44px) 16px 10px;
+      padding: env(safe-area-inset-top, 8px) 16px 10px;
       background:linear-gradient(to bottom, rgba(0,0,0,0.75) 0%, transparent 100%);
       z-index:20; display:flex; align-items:flex-start; justify-content:space-between;
     }
@@ -170,11 +191,11 @@
     }
 
     /* ===== FLASH ===== */
-    .flash-screen { position:fixed; inset:0; background:#fff; opacity:0; z-index:50; pointer-events:none; transition:opacity 0.08s; }
+    .flash-screen { position:fixed; top:0; left:0; right:0; bottom:0; background:#fff; opacity:0; z-index:50; pointer-events:none; transition:opacity 0.08s; }
     .flash-screen.on { opacity:0.7; }
 
     /* ===== GALLERY ===== */
-    #gallery { position:fixed; inset:0; background:#000; z-index:60; display:none; flex-direction:column; }
+    #gallery { position:fixed; top:0; left:0; right:0; bottom:0; background:#000; z-index:60; display:none; flex-direction:column; }
     #gallery.visible { display:flex; }
     .gh { display:flex; align-items:center; justify-content:space-between; padding:max(env(safe-area-inset-top,16px),44px) 16px 12px; background:rgba(0,0,0,0.95); }
     .gh button { background:none; border:none; font-size:16px; cursor:pointer; padding:8px; }
@@ -499,33 +520,50 @@ document.onkeydown = function(e) {
   if (e.code === 'KeyF') flipCam();
 };
 
-// ===== SAFARI TOOLBAR AUTO-HIDE =====
-// Scroll trick: scrolling slightly hides Safari's address bar
-function hideSafariBar() {
-  if (window.navigator.standalone) return; // already in PWA mode
-  setTimeout(function() { window.scrollTo(0, 1); }, 100);
+// ===== PHONE VIEWPORT FIX =====
+// Use visualViewport API to get the real visible area on phones (excludes Safari toolbar)
+function fixViewport() {
+  var vh;
+  if (window.visualViewport) {
+    vh = window.visualViewport.height;
+  } else {
+    vh = window.innerHeight;
+  }
+  document.documentElement.style.setProperty('--vh', vh + 'px');
+  document.body.style.height = vh + 'px';
+  var cam = q('cam');
+  if (cam && !cam.classList.contains('hidden')) {
+    cam.style.height = vh + 'px';
+  }
+  var perm = q('perm');
+  if (perm && !perm.classList.contains('hidden')) {
+    perm.style.height = vh + 'px';
+  }
 }
 
-// Re-trigger on orientation change
+// Listen to visualViewport changes (Safari iOS toolbar show/hide)
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', fixViewport);
+  window.visualViewport.addEventListener('scroll', fixViewport);
+}
+window.addEventListener('resize', fixViewport);
 window.addEventListener('orientationchange', function() {
-  hideSafariBar();
-  // Force layout recalc after rotation
-  setTimeout(function() {
-    document.body.style.height = window.innerHeight + 'px';
-    window.scrollTo(0, 1);
-  }, 300);
+  setTimeout(fixViewport, 100);
+  setTimeout(fixViewport, 300);
+  setTimeout(fixViewport, 500);
 });
 
-// Also update on resize (Safari toolbar show/hide)
-window.addEventListener('resize', function() {
-  document.body.style.height = window.innerHeight + 'px';
-});
+// Initial
+fixViewport();
 
-// Initial setup
-document.body.style.height = window.innerHeight + 'px';
+// Scroll trick: scrolling slightly hides Safari's address bar on iOS
+function hideSafariBar() {
+  if (window.navigator.standalone) return;
+  setTimeout(function() { window.scrollTo(0, 1); }, 100);
+  setTimeout(function() { window.scrollTo(0, 1); }, 300);
+}
 
 // ===== FULLSCREEN ON CAMERA START =====
-// Try to go fullscreen when user taps "Enable Camera" (requires gesture)
 var origStartCam = startCam;
 startCam = function() {
   // Try fullscreen (works on Chrome Android, not Safari iOS)
@@ -535,7 +573,11 @@ startCam = function() {
     else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
   } catch(e) {}
   hideSafariBar();
+  fixViewport();
   origStartCam();
+  // Keep fixing viewport as camera stream loads
+  setTimeout(fixViewport, 500);
+  setTimeout(fixViewport, 1000);
 };
 
 // ===== PWA INSTALL BANNER =====
