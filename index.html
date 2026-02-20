@@ -349,18 +349,37 @@ function q(id) { return document.getElementById(id); }
 
 // Camera
 function startCam() {
-  if (S.stream) { S.stream.getTracks().forEach(function(t){t.stop();}); }
-  navigator.mediaDevices.getUserMedia({
-    video: { facingMode:S.face, width:{ideal:1920}, height:{ideal:1080} },
+  if (S.stream) { S.stream.getTracks().forEach(function(t){t.stop();}); S.stream = null; }
+
+  // Use "exact" to force the correct camera (especially in PWA mode on Android)
+  var constraints = {
+    video: {
+      facingMode: { exact: S.face },
+      width: { ideal: 1920 },
+      height: { ideal: 1080 }
+    },
     audio: false
-  }).then(function(stream) {
-    S.stream = stream;
-    q('video').srcObject = stream;
-    q('video').play();
-    q('perm').classList.add('hidden');
-    q('cam').classList.remove('hidden');
-    loadCat(S.cat);
-  }).catch(function(e) {
+  };
+
+  navigator.mediaDevices.getUserMedia(constraints)
+  .then(onCamSuccess)
+  .catch(function(e) {
+    // "exact" failed — try without "exact" as fallback
+    var fallback = {
+      video: {
+        facingMode: S.face,
+        width: { ideal: 1920 },
+        height: { ideal: 1080 }
+      },
+      audio: false
+    };
+    return navigator.mediaDevices.getUserMedia(fallback).then(onCamSuccess);
+  })
+  .catch(function(e) {
+    // Last resort: just get any camera
+    return navigator.mediaDevices.getUserMedia({ video: true, audio: false }).then(onCamSuccess);
+  })
+  .catch(function(e) {
     var err = q('perm-err');
     err.style.display = 'block';
     if (e.name === 'NotAllowedError') {
@@ -369,6 +388,24 @@ function startCam() {
       err.textContent = 'Error: ' + e.message;
     }
   });
+}
+
+function onCamSuccess(stream) {
+  S.stream = stream;
+  q('video').srcObject = stream;
+  q('video').play();
+  q('perm').classList.add('hidden');
+  q('cam').classList.remove('hidden');
+  loadCat(S.cat);
+
+  // Check which camera we actually got and update S.face
+  var track = stream.getVideoTracks()[0];
+  if (track) {
+    var settings = track.getSettings();
+    if (settings.facingMode) {
+      S.face = settings.facingMode;
+    }
+  }
 }
 
 function flipCam() {
