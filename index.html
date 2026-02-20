@@ -9,6 +9,9 @@
   <meta name="theme-color" content="#000000">
   <title>Ghost Overlay Camera</title>
   <link rel="manifest" href="manifest.json">
+  <!-- TensorFlow.js + COCO-SSD for vehicle detection -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
   <style>
     * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
     html, body {
@@ -192,7 +195,7 @@
 
       .align-prompt { bottom:80px; }
       .align-badge { padding:6px 16px; font-size:12px; }
-      .align-arrow { font-size:18px; }
+      .align-arrows { font-size:16px; }
       .align-sub { font-size:11px; }
     }
 
@@ -228,8 +231,21 @@
       pointer-events:none;
       transition: opacity 0.3s;
     }
-    .align-arrow { font-size:28px; opacity:0.5; animation:bounce 1.5s ease infinite; }
-    @keyframes bounce { 0%,100%{transform:translateY(0);} 50%{transform:translateY(6px);} }
+    .align-arrows {
+      display:flex; gap:6px; font-size:22px; opacity:0.85;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+    }
+    .align-arrows .dir-arrow {
+      display:inline-block; animation: nudge 1s ease infinite;
+    }
+    .align-arrows .dir-arrow.left { animation-name: nudge-left; }
+    .align-arrows .dir-arrow.right { animation-name: nudge-right; }
+    .align-arrows .dir-arrow.up { animation-name: nudge-up; }
+    .align-arrows .dir-arrow.down { animation-name: nudge-down; }
+    @keyframes nudge-left { 0%,100%{transform:translateX(0);} 50%{transform:translateX(-6px);} }
+    @keyframes nudge-right { 0%,100%{transform:translateX(0);} 50%{transform:translateX(6px);} }
+    @keyframes nudge-up { 0%,100%{transform:translateY(0);} 50%{transform:translateY(-6px);} }
+    @keyframes nudge-down { 0%,100%{transform:translateY(0);} 50%{transform:translateY(6px);} }
     .align-badge {
       backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
       padding:12px 28px; border-radius:14px; font-size:16px; font-weight:600;
@@ -388,8 +404,8 @@
   </div>
 
   <div class="align-prompt">
-    <div class="align-arrow">&#x2304;</div>
-    <div class="align-badge" id="align-txt">Align the camera!</div>
+    <div class="align-arrows" id="align-arrows"></div>
+    <div class="align-badge" id="align-txt">Loading AI...</div>
     <div class="align-sub" id="align-sub">Position vehicle within overlay</div>
   </div>
 
@@ -669,31 +685,70 @@ function capture() {
   }
 }
 
-// ===== ALIGNMENT & MOTION DETECTION =====
-// Tracks phone steadiness using DeviceMotion accelerometer
+// ===== ALIGNMENT & VEHICLE DETECTION =====
+// Uses COCO-SSD AI model to detect vehicles in the camera feed
+// Compares detected vehicle position to overlay position for directional guidance
 var A = {
-  state: 'seeking',     // seeking | close | locked | captured
-  steadyStart: 0,       // timestamp when phone became steady
-  holdTime: 2000,       // ms to hold still before auto-capture
-  motionSamples: [],    // recent acceleration samples
-  sampleSize: 20,       // more samples = smoother averaging
-  thresholdClose: 6.0,  // motion below this = "close" (getting steady)
-  thresholdLock: 3.0,   // motion below this = "locked" (hold still) — hand-friendly
+  state: 'seeking',       // loading | seeking | close | locked | captured
+  steadyStart: 0,
+  holdTime: 2000,         // ms to hold in position before auto-capture
   autoCapturing: false,
   rafId: null,
-  lastStateChange: 0,   // debounce rapid state flipping
-  debounceMs: 400       // min ms between state changes
+  lastStateChange: 0,
+  debounceMs: 300,
+  // Vehicle detection
+  model: null,            // COCO-SSD model
+  modelReady: false,
+  detecting: false,
+  detectionInterval: null,
+  // Position tracking
+  positionHistory: [],    // recent position scores for smoothing
+  posHistorySize: 5,
+  // What classes count as vehicles
+  vehicleClasses: ['car', 'truck', 'bus'],
+  interiorClasses: ['car', 'truck', 'bus', 'chair', 'couch', 'dining table', 'cell phone'],
+  // Thresholds for position matching (0-1 where 1 = perfect)
+  thresholdClose: 0.45,   // position score above this = "close" (yellow)
+  thresholdLock: 0.70     // position score above this = "locked" (green)
 };
+
+// Load the AI model
+function loadDetectionModel() {
+  q('align-txt').textContent = '🧠 Loading AI...';
+  q('align-txt').className = 'align-badge seeking';
+  q('align-arrows').innerHTML = '';
+
+  cocoSsd.load({ base: 'lite_mobilenet_v2' }).then(function(model) {
+    A.model = model;
+    A.modelReady = true;
+    q('align-txt').textContent = 'Point at vehicle';
+    q('align-sub').textContent = 'AI is ready — find the car!';
+    toast('🧠 AI loaded');
+    startVehicleDetection();
+  }).catch(function(err) {
+    console.error('COCO-SSD load failed:', err);
+    A.modelReady = false;
+    q('align-txt').textContent = 'Align manually';
+    q('align-sub').textContent = 'AI unavailable — use overlay as guide';
+    // Fall back to motion-only detection
+    startMotionOnlyDetection();
+  });
+}
 
 function resetAlign() {
   A.state = 'seeking';
   A.steadyStart = 0;
   A.autoCapturing = false;
   A.lastStateChange = 0;
-  A.motionSamples = [];
+  A.positionHistory = [];
   S.autoCapturing = false;
   setAlignState('seeking');
-  q('align-txt').textContent = 'Align the camera';
+  if (A.modelReady) {
+    q('align-txt').textContent = 'Point at vehicle';
+  } else {
+    q('align-txt').textContent = 'Align the camera';
+  }
+  q('align-arrows').innerHTML = '';
   q('hold-progress').classList.remove('visible');
   setProgress(0);
 }
@@ -707,212 +762,365 @@ function setAlignState(state) {
 }
 
 function setProgress(pct) {
-  // pct 0-1
-  var circumference = 251.3; // 2 * PI * 40
+  var circumference = 251.3;
   var offset = circumference * (1 - pct);
   q('prog-circle').style.strokeDashoffset = offset;
 }
 
-// Listen to device motion (accelerometer)
-function onDeviceMotion(e) {
-  var acc = e.accelerationIncludingGravity || e.acceleration;
-  if (!acc) return;
+// Get the overlay/alignment frame's position relative to the video feed
+function getOverlayRect() {
+  var frame = q('align-frame');
+  var video = q('video');
+  var vRect = video.getBoundingClientRect();
+  var fRect = frame.getBoundingClientRect();
 
-  // Calculate magnitude of acceleration change (jitter)
-  var mag = Math.sqrt(acc.x * acc.x + acc.y * acc.y + acc.z * acc.z);
+  // Normalize to 0-1 relative to video display area
+  return {
+    x: (fRect.left - vRect.left) / vRect.width,
+    y: (fRect.top - vRect.top) / vRect.height,
+    w: fRect.width / vRect.width,
+    h: fRect.height / vRect.height,
+    cx: ((fRect.left + fRect.width/2) - vRect.left) / vRect.width,
+    cy: ((fRect.top + fRect.height/2) - vRect.top) / vRect.height
+  };
+}
 
-  A.motionSamples.push(mag);
-  if (A.motionSamples.length > A.sampleSize) {
-    A.motionSamples.shift();
+// Calculate how well the detected vehicle matches the overlay position
+// Returns { score: 0-1, hints: ['left','up',...] }
+function calcPositionMatch(detection, overlayRect) {
+  var v = q('video');
+  var vRect = v.getBoundingClientRect();
+
+  // Detection bbox is [x, y, width, height] in pixel coords of the video element
+  var det = {
+    x: detection.bbox[0] / vRect.width,
+    y: detection.bbox[1] / vRect.height,
+    w: detection.bbox[2] / vRect.width,
+    h: detection.bbox[3] / vRect.height
+  };
+  det.cx = det.x + det.w/2;
+  det.cy = det.y + det.h/2;
+
+  var ov = overlayRect;
+  var hints = [];
+
+  // Center offset (how far off center)
+  var dx = det.cx - ov.cx;
+  var dy = det.cy - ov.cy;
+
+  // Size ratio (detected vs overlay)
+  var sizeRatio = (det.w * det.h) / (ov.w * ov.h);
+
+  // Directional hints
+  if (dx < -0.08) hints.push('right');  // car is to the left, move phone right
+  if (dx > 0.08) hints.push('left');    // car is to the right, move phone left
+  if (dy < -0.08) hints.push('down');   // car is above, move phone down
+  if (dy > 0.08) hints.push('up');      // car is below, move phone up
+  if (sizeRatio < 0.35) hints.push('closer');
+  if (sizeRatio > 2.0) hints.push('back');
+
+  // Score: combine center accuracy and size accuracy
+  var centerScore = 1 - Math.min(Math.sqrt(dx*dx + dy*dy) / 0.3, 1);
+  var sizeScore = 1 - Math.min(Math.abs(Math.log(Math.max(sizeRatio, 0.1))) / 1.5, 1);
+
+  // Overlap score (IoU-like)
+  var ix1 = Math.max(det.x, ov.x);
+  var iy1 = Math.max(det.y, ov.y);
+  var ix2 = Math.min(det.x + det.w, ov.x + ov.w);
+  var iy2 = Math.min(det.y + det.h, ov.y + ov.h);
+  var interArea = Math.max(0, ix2-ix1) * Math.max(0, iy2-iy1);
+  var unionArea = det.w*det.h + ov.w*ov.h - interArea;
+  var iou = unionArea > 0 ? interArea/unionArea : 0;
+
+  var score = centerScore * 0.35 + sizeScore * 0.25 + iou * 0.40;
+
+  return { score: score, hints: hints, sizeRatio: sizeRatio };
+}
+
+// Build directional arrows HTML
+function buildArrowsHTML(hints) {
+  if (!hints || hints.length === 0) return '';
+  var arrows = {
+    left: '<span class="dir-arrow left">◀</span>',
+    right: '<span class="dir-arrow right">▶</span>',
+    up: '<span class="dir-arrow up">▲</span>',
+    down: '<span class="dir-arrow down">▼</span>',
+    closer: '<span class="dir-arrow down" style="font-size:14px;">🔍+</span>',
+    back: '<span class="dir-arrow up" style="font-size:14px;">🔍−</span>'
+  };
+  var html = '';
+  for (var i = 0; i < hints.length; i++) {
+    if (arrows[hints[i]]) html += arrows[hints[i]];
   }
+  return html;
+}
 
-  // Average jitter
-  var sum = 0;
-  for (var i = 0; i < A.motionSamples.length; i++) sum += A.motionSamples[i];
-  var avg = sum / A.motionSamples.length;
-
-  // Calculate variance (how much it's changing)
-  var variance = 0;
-  for (var i = 0; i < A.motionSamples.length; i++) {
-    var diff = A.motionSamples[i] - avg;
-    variance += diff * diff;
+// Build hint text from directional hints
+function buildHintText(hints) {
+  if (!hints || hints.length === 0) return 'Align the camera';
+  var texts = [];
+  for (var i = 0; i < hints.length; i++) {
+    if (hints[i] === 'left') texts.push('Move left');
+    if (hints[i] === 'right') texts.push('Move right');
+    if (hints[i] === 'up') texts.push('Move up');
+    if (hints[i] === 'down') texts.push('Move down');
+    if (hints[i] === 'closer') texts.push('Move closer');
+    if (hints[i] === 'back') texts.push('Step back');
   }
-  variance = variance / A.motionSamples.length;
-  var jitter = Math.sqrt(variance);
+  return texts.slice(0, 2).join(' · ');
+}
 
-  // Don't update if already captured or auto-capturing
+// Run vehicle detection on current video frame
+function detectVehicle() {
+  if (!A.modelReady || !A.model || A.detecting) return;
   if (A.state === 'captured' || S.autoCapturing) return;
 
+  var v = q('video');
+  if (!v || v.readyState < 2) return;
+
+  A.detecting = true;
+
+  // Determine which classes to look for
+  var isInterior = (S.cat === 'interior');
+  var validClasses = isInterior ? A.interiorClasses : A.vehicleClasses;
+  var minScore = isInterior ? 0.25 : 0.30;
+
+  A.model.detect(v, 8).then(function(predictions) {
+    A.detecting = false;
+    if (A.state === 'captured' || S.autoCapturing) return;
+
+    // Find best vehicle detection
+    var best = null;
+    var bestScore = 0;
+    for (var i = 0; i < predictions.length; i++) {
+      var p = predictions[i];
+      if (validClasses.indexOf(p.class) !== -1 && p.score > minScore && p.score > bestScore) {
+        best = p;
+        bestScore = p.score;
+      }
+    }
+
+    var now = Date.now();
+    var sinceLastChange = now - A.lastStateChange;
+
+    if (!best) {
+      // No vehicle found
+      A.positionHistory = [];
+      if (A.state !== 'seeking') {
+        if (sinceLastChange < A.debounceMs) return;
+        A.lastStateChange = now;
+        setAlignState('seeking');
+        q('align-txt').textContent = isInterior ? 'Point at interior' : 'Find the vehicle';
+        q('align-sub').textContent = 'No ' + (isInterior ? 'object' : 'vehicle') + ' detected';
+        q('align-arrows').innerHTML = '';
+        q('hold-progress').classList.remove('visible');
+        A.steadyStart = 0;
+        setProgress(0);
+      }
+      return;
+    }
+
+    // We found a vehicle — check position
+    var overlayRect = getOverlayRect();
+    var match = calcPositionMatch(best, overlayRect);
+
+    // Smooth the score
+    A.positionHistory.push(match.score);
+    if (A.positionHistory.length > A.posHistorySize) A.positionHistory.shift();
+    var avgScore = 0;
+    for (var i = 0; i < A.positionHistory.length; i++) avgScore += A.positionHistory[i];
+    avgScore /= A.positionHistory.length;
+
+    if (avgScore >= A.thresholdLock && A.positionHistory.length >= 3) {
+      // Well positioned — locked (green)!
+      if (A.state !== 'locked') {
+        if (sinceLastChange < A.debounceMs) return;
+        A.lastStateChange = now;
+        setAlignState('locked');
+        q('align-txt').textContent = '● Hold still...';
+        q('align-arrows').innerHTML = '✓';
+        q('hold-progress').classList.add('visible');
+        A.steadyStart = now;
+        if (navigator.vibrate) navigator.vibrate(15);
+      }
+      // Progress toward auto-capture
+      var elapsed = now - A.steadyStart;
+      var pct = Math.min(elapsed / A.holdTime, 1);
+      setProgress(pct);
+
+      if (pct >= 1 && !S.autoCapturing) {
+        S.autoCapturing = true;
+        if (navigator.vibrate) navigator.vibrate([40, 30, 40]);
+        capture();
+      }
+    } else if (avgScore >= A.thresholdClose) {
+      // Getting close — yellow
+      if (A.state !== 'close') {
+        if (sinceLastChange < A.debounceMs) return;
+        A.lastStateChange = now;
+        setAlignState('close');
+        q('hold-progress').classList.remove('visible');
+        A.steadyStart = 0;
+        setProgress(0);
+      }
+      q('align-txt').textContent = 'Almost there...';
+      q('align-arrows').innerHTML = buildArrowsHTML(match.hints);
+      q('align-sub').textContent = buildHintText(match.hints) || 'Fine-tune position';
+    } else {
+      // Vehicle found but not aligned — red with directional guidance
+      if (A.state !== 'seeking') {
+        if (sinceLastChange < A.debounceMs) return;
+        A.lastStateChange = now;
+      }
+      setAlignState('seeking');
+      q('align-txt').textContent = buildHintText(match.hints) || 'Adjust position';
+      q('align-arrows').innerHTML = buildArrowsHTML(match.hints);
+      q('align-sub').textContent = (best.class === 'car' ? 'Car' : best.class) + ' detected — adjust framing';
+      q('hold-progress').classList.remove('visible');
+      A.steadyStart = 0;
+      setProgress(0);
+    }
+  }).catch(function(err) {
+    A.detecting = false;
+    console.error('Detection error:', err);
+  });
+}
+
+// Start vehicle detection loop
+function startVehicleDetection() {
+  if (A.detectionInterval) clearInterval(A.detectionInterval);
+  // Run detection every 350ms (fast enough for guidance, light enough for phone)
+  A.detectionInterval = setInterval(detectVehicle, 350);
+}
+
+// Fallback: motion-only detection (if AI model fails to load)
+function startMotionOnlyDetection() {
+  if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+    DeviceMotionEvent.requestPermission().then(function(response) {
+      if (response === 'granted') {
+        window.addEventListener('devicemotion', onDeviceMotionFallbackOnly, true);
+      }
+    }).catch(function() {
+      startFrameFallback();
+    });
+  } else if (typeof DeviceMotionEvent !== 'undefined') {
+    window.addEventListener('devicemotion', onDeviceMotionFallbackOnly, true);
+    setTimeout(function() {
+      if (!A._gotMotionEvent) startFrameFallback();
+    }, 1000);
+  } else {
+    startFrameFallback();
+  }
+}
+
+// Simple motion-only fallback (no AI) — just steadiness
+var motionFallbackSamples = [];
+function onDeviceMotionFallbackOnly(e) {
+  A._gotMotionEvent = true;
+  var acc = e.accelerationIncludingGravity || e.acceleration;
+  if (!acc) return;
+  var mag = Math.sqrt(acc.x*acc.x + acc.y*acc.y + acc.z*acc.z);
+  motionFallbackSamples.push(mag);
+  if (motionFallbackSamples.length > 20) motionFallbackSamples.shift();
+  if (motionFallbackSamples.length < 10) return;
+
+  var sum = 0;
+  for (var i = 0; i < motionFallbackSamples.length; i++) sum += motionFallbackSamples[i];
+  var avg = sum / motionFallbackSamples.length;
+  var variance = 0;
+  for (var i = 0; i < motionFallbackSamples.length; i++) {
+    var d = motionFallbackSamples[i] - avg;
+    variance += d*d;
+  }
+  var jitter = Math.sqrt(variance / motionFallbackSamples.length);
+
+  if (A.state === 'captured' || S.autoCapturing) return;
   var now = Date.now();
   var sinceLastChange = now - A.lastStateChange;
 
-  if (jitter < A.thresholdLock && A.motionSamples.length >= A.sampleSize) {
-    // Very steady — locked!
+  if (jitter < 3.0) {
     if (A.state !== 'locked') {
-      if (sinceLastChange < A.debounceMs) return; // debounce
+      if (sinceLastChange < 400) return;
       A.lastStateChange = now;
       setAlignState('locked');
       q('align-txt').textContent = '● Hold still...';
       q('hold-progress').classList.add('visible');
       A.steadyStart = now;
-      if (navigator.vibrate) navigator.vibrate(15);
     }
-
-    // Progress toward auto-capture
     var elapsed = now - A.steadyStart;
     var pct = Math.min(elapsed / A.holdTime, 1);
     setProgress(pct);
-
     if (pct >= 1 && !S.autoCapturing) {
-      // Auto-capture!
       S.autoCapturing = true;
       if (navigator.vibrate) navigator.vibrate([40, 30, 40]);
       capture();
     }
-  } else if (jitter < A.thresholdClose) {
-    // Getting close — yellow
+  } else if (jitter < 6.0) {
     if (A.state !== 'close') {
-      if (sinceLastChange < A.debounceMs) return; // debounce
+      if (sinceLastChange < 400) return;
       A.lastStateChange = now;
       setAlignState('close');
       q('align-txt').textContent = 'Almost there...';
       q('hold-progress').classList.remove('visible');
-      A.steadyStart = 0;
-      setProgress(0);
+      A.steadyStart = 0; setProgress(0);
     }
   } else {
-    // Too much movement — red
     if (A.state !== 'seeking') {
-      if (sinceLastChange < A.debounceMs) return; // debounce
+      if (sinceLastChange < 400) return;
       A.lastStateChange = now;
       setAlignState('seeking');
-      q('align-txt').textContent = 'Align the camera';
+      q('align-txt').textContent = 'Hold steady';
       q('hold-progress').classList.remove('visible');
-      A.steadyStart = 0;
-      setProgress(0);
+      A.steadyStart = 0; setProgress(0);
     }
   }
 }
 
-// Request motion permission (required on iOS 13+)
-function startMotionDetection() {
-  if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
-    // iOS 13+ requires permission
-    DeviceMotionEvent.requestPermission().then(function(response) {
-      if (response === 'granted') {
-        window.addEventListener('devicemotion', onDeviceMotion, true);
-      }
-    }).catch(function() {
-      // Permission denied or not available — use fallback
-      startFallbackDetection();
-    });
-  } else if (typeof DeviceMotionEvent !== 'undefined') {
-    // Android or older iOS — just listen
-    window.addEventListener('devicemotion', onDeviceMotion, true);
-    // Check if we actually get events (some desktops don't)
-    setTimeout(function() {
-      if (A.motionSamples.length === 0) {
-        startFallbackDetection();
-      }
-    }, 1000);
-  } else {
-    startFallbackDetection();
-  }
-}
-
-// Fallback: use video frame analysis for motion detection (works on desktop too)
-var fallbackPrevFrame = null;
-function startFallbackDetection() {
+// Frame-based fallback for desktop (no motion, no AI)
+function startFrameFallback() {
   var miniCanvas = document.createElement('canvas');
-  miniCanvas.width = 64;
-  miniCanvas.height = 48;
+  miniCanvas.width = 64; miniCanvas.height = 48;
   var ctx = miniCanvas.getContext('2d');
+  var prevFrame = null;
 
   function checkFrame() {
-    if (A.state === 'captured' || S.autoCapturing) {
-      fallbackPrevFrame = null;
-      A.rafId = requestAnimationFrame(checkFrame);
-      return;
-    }
-
+    if (A.state === 'captured' || S.autoCapturing) { prevFrame = null; A.rafId = requestAnimationFrame(checkFrame); return; }
     var v = q('video');
-    if (!v || v.readyState < 2) {
-      A.rafId = requestAnimationFrame(checkFrame);
-      return;
-    }
-
+    if (!v || v.readyState < 2) { A.rafId = requestAnimationFrame(checkFrame); return; }
     ctx.drawImage(v, 0, 0, 64, 48);
     var data = ctx.getImageData(0, 0, 64, 48).data;
-
-    if (fallbackPrevFrame) {
-      // Compare frames — sum of pixel differences
-      var diff = 0;
-      var pixels = data.length / 4;
-      for (var i = 0; i < data.length; i += 16) { // sample every 4th pixel
-        diff += Math.abs(data[i] - fallbackPrevFrame[i]);
-        diff += Math.abs(data[i+1] - fallbackPrevFrame[i+1]);
-        diff += Math.abs(data[i+2] - fallbackPrevFrame[i+2]);
+    if (prevFrame) {
+      var diff = 0, pixels = data.length / 4;
+      for (var i = 0; i < data.length; i += 16) {
+        diff += Math.abs(data[i] - prevFrame[i]) + Math.abs(data[i+1] - prevFrame[i+1]) + Math.abs(data[i+2] - prevFrame[i+2]);
       }
       var avgDiff = diff / (pixels / 4);
-
-      // Simulate motion event
-      var fakeJitter = avgDiff / 10;
-      onDeviceMotionFallback(fakeJitter);
+      var jitter = avgDiff / 10;
+      // Reuse the simple motion fallback logic
+      var now = Date.now();
+      var sinceLastChange = now - A.lastStateChange;
+      if (A.state !== 'captured' && !S.autoCapturing) {
+        if (jitter < 1.2) {
+          if (A.state !== 'locked') { if (sinceLastChange < 400) { prevFrame = new Uint8Array(data); A.rafId = requestAnimationFrame(checkFrame); return; } A.lastStateChange = now; setAlignState('locked'); q('align-txt').textContent = '● Hold still...'; q('hold-progress').classList.add('visible'); A.steadyStart = now; }
+          var elapsed = now - A.steadyStart; var pct = Math.min(elapsed / A.holdTime, 1); setProgress(pct);
+          if (pct >= 1 && !S.autoCapturing) { S.autoCapturing = true; capture(); }
+        } else if (jitter < 3.0) {
+          if (A.state !== 'close') { if (sinceLastChange < 400) { prevFrame = new Uint8Array(data); A.rafId = requestAnimationFrame(checkFrame); return; } A.lastStateChange = now; setAlignState('close'); q('align-txt').textContent = 'Almost there...'; q('hold-progress').classList.remove('visible'); A.steadyStart = 0; setProgress(0); }
+        } else {
+          if (A.state !== 'seeking') { if (sinceLastChange < 400) { prevFrame = new Uint8Array(data); A.rafId = requestAnimationFrame(checkFrame); return; } A.lastStateChange = now; setAlignState('seeking'); q('align-txt').textContent = 'Hold steady'; q('hold-progress').classList.remove('visible'); A.steadyStart = 0; setProgress(0); }
+        }
+      }
     }
-
-    fallbackPrevFrame = new Uint8Array(data);
+    prevFrame = new Uint8Array(data);
     A.rafId = requestAnimationFrame(checkFrame);
   }
-
   A.rafId = requestAnimationFrame(checkFrame);
 }
 
-function onDeviceMotionFallback(jitter) {
-  if (A.state === 'captured' || S.autoCapturing) return;
-
-  var now = Date.now();
-  var sinceLastChange = now - A.lastStateChange;
-
-  if (jitter < 1.2) {
-    // Very steady
-    if (A.state !== 'locked') {
-      if (sinceLastChange < A.debounceMs) return;
-      A.lastStateChange = now;
-      setAlignState('locked');
-      q('align-txt').textContent = '● Hold still...';
-      q('hold-progress').classList.add('visible');
-      A.steadyStart = now;
-      if (navigator.vibrate) navigator.vibrate(15);
-    }
-    var elapsed = now - A.steadyStart;
-    var pct = Math.min(elapsed / A.holdTime, 1);
-    setProgress(pct);
-    if (pct >= 1 && !S.autoCapturing) {
-      S.autoCapturing = true;
-      if (navigator.vibrate) navigator.vibrate([40, 30, 40]);
-      capture();
-    }
-  } else if (jitter < 3.0) {
-    if (A.state !== 'close') {
-      if (sinceLastChange < A.debounceMs) return;
-      A.lastStateChange = now;
-      setAlignState('close');
-      q('align-txt').textContent = 'Almost there...';
-      q('hold-progress').classList.remove('visible');
-      A.steadyStart = 0;
-      setProgress(0);
-    }
-  } else {
-    if (A.state !== 'seeking') {
-      if (sinceLastChange < A.debounceMs) return;
-      A.lastStateChange = now;
-      setAlignState('seeking');
-      q('align-txt').textContent = 'Align the camera';
-      q('hold-progress').classList.remove('visible');
-      A.steadyStart = 0;
-      setProgress(0);
-    }
-  }
+// Start the detection system (called when camera starts)
+function startMotionDetection() {
+  // Try to load AI model; falls back to motion-only if it fails
+  loadDetectionModel();
 }
 
 // Gallery
