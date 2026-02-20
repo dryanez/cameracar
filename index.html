@@ -11,20 +11,17 @@
   <link rel="manifest" href="manifest.json">
   <style>
     * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-    html { height:100%; }
-    body {
-      width:100%;
-      /* MUST be taller than viewport so Safari scroll-to-hide works */
-      min-height: calc(100vh + 1px);
-      min-height: calc(100dvh + 1px);
+    html, body {
+      width:100%; height:100%; overflow:hidden;
       background:#000;
       font-family:-apple-system,BlinkMacSystemFont,'SF Pro','Helvetica Neue',sans-serif;
       color:#fff; touch-action:manipulation;
-      -webkit-overflow-scrolling:touch;
+      /* CSS custom prop set by JS from visualViewport */
+      --app-h: 100vh;
     }
 
     /* ===== PERMISSION ===== */
-    #perm { position:fixed; top:0; left:0; right:0; bottom:0; width:100%; height:100vh; height:100dvh; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#000; z-index:100; padding:40px; text-align:center; }
+    #perm { position:fixed; top:0; left:0; width:100%; height:var(--app-h, 100vh); display:flex; flex-direction:column; align-items:center; justify-content:center; background:#000; z-index:100; padding:40px; text-align:center; }
     #perm.hidden { display:none; }
     .perm-icon { font-size:48px; margin-bottom:20px; }
     .perm-title { font-size:26px; font-weight:700; margin-bottom:10px; }
@@ -34,7 +31,7 @@
     #perm-err { color:#ff6b6b; margin-top:16px; font-size:13px; display:none; }
 
     /* ===== CAMERA ===== */
-    #cam { position:fixed; top:0; left:0; right:0; bottom:0; width:100%; height:100vh; height:100dvh; background:#000; }
+    #cam { position:fixed; top:0; left:0; width:100%; height:var(--app-h, 100vh); background:#000; overflow:hidden; }
     #cam.hidden { display:none; }
     #video { position:absolute; top:0; left:0; width:100%; height:100%; object-fit:cover; }
 
@@ -42,20 +39,18 @@
     #ghost { position:absolute; top:0; left:0; right:0; bottom:0; display:flex; align-items:center; justify-content:center; pointer-events:none; z-index:10; padding:0; }
     #ghost img {
       width: 100%;
-      height: 72vh;
-      height: 72dvh;
+      height: calc(var(--app-h, 100vh) * 0.65);
       object-fit: contain;
       opacity: 0.5;
       filter: drop-shadow(0 0 6px rgba(200,160,60,0.4));
       transition: opacity 0.3s, filter 0.3s;
-      margin-top: -60px;
+      margin-top: -40px;
     }
 
     /* ===== LANDSCAPE MODE (PHONE) ===== */
     @media (orientation: landscape) {
       #ghost img {
-        height: 80vh;
-        height: 80dvh;
+        height: calc(var(--app-h, 100vh) * 0.82);
         width: 60%;
         margin-top: 0;
       }
@@ -86,7 +81,7 @@
     /* Extra compact for very short phones in landscape (height < 400px) */
     @media (orientation: landscape) and (max-height: 400px) {
       .top-bar { display:none; }
-      #ghost img { height: 90vh; height: 90dvh; width: 55%; }
+      #ghost img { height: calc(var(--app-h, 100vh) * 0.88); width: 55%; }
       .cap-btn { width:44px; height:44px; }
       .shot-thumb { width:30px; height:30px; }
       .shot-thumb.active { width:38px; height:38px; }
@@ -195,11 +190,11 @@
     }
 
     /* ===== FLASH ===== */
-    .flash-screen { position:fixed; top:0; left:0; right:0; bottom:0; background:#fff; opacity:0; z-index:50; pointer-events:none; transition:opacity 0.08s; }
+    .flash-screen { position:fixed; top:0; left:0; width:100%; height:var(--app-h, 100vh); background:#fff; opacity:0; z-index:50; pointer-events:none; transition:opacity 0.08s; }
     .flash-screen.on { opacity:0.7; }
 
     /* ===== GALLERY ===== */
-    #gallery { position:fixed; top:0; left:0; right:0; bottom:0; background:#000; z-index:60; display:none; flex-direction:column; }
+    #gallery { position:fixed; top:0; left:0; width:100%; height:var(--app-h, 100vh); background:#000; z-index:60; display:none; flex-direction:column; }
     #gallery.visible { display:flex; }
     .gh { display:flex; align-items:center; justify-content:space-between; padding:max(env(safe-area-inset-top,16px),44px) 16px 12px; background:rgba(0,0,0,0.95); }
     .gh button { background:none; border:none; font-size:16px; cursor:pointer; padding:8px; }
@@ -525,71 +520,50 @@ document.onkeydown = function(e) {
 };
 
 // ===== PHONE VIEWPORT FIX =====
-// Use visualViewport API to get the real visible area on phones (excludes Safari toolbar)
+// Use visualViewport to perfectly size the app to whatever Safari gives us
+// This works WITH the toolbar — no fighting Safari
 function fixViewport() {
-  var vh;
+  var vh, vw;
   if (window.visualViewport) {
     vh = window.visualViewport.height;
+    vw = window.visualViewport.width;
   } else {
     vh = window.innerHeight;
+    vw = window.innerWidth;
   }
-  document.documentElement.style.setProperty('--vh', vh + 'px');
-  document.body.style.height = vh + 'px';
-  var cam = q('cam');
-  if (cam && !cam.classList.contains('hidden')) {
-    cam.style.height = vh + 'px';
-  }
-  var perm = q('perm');
-  if (perm && !perm.classList.contains('hidden')) {
-    perm.style.height = vh + 'px';
+  // Set CSS custom property so all elements use the real visible height
+  document.documentElement.style.setProperty('--app-h', vh + 'px');
+  // Also pin the offset in case Safari scrolls the viewport
+  if (window.visualViewport && window.visualViewport.offsetTop > 0) {
+    window.scrollTo(0, 0);
   }
 }
 
-// Listen to visualViewport changes (Safari iOS toolbar show/hide)
+// Listen to visualViewport changes (Safari iOS toolbar show/hide triggers this)
 if (window.visualViewport) {
   window.visualViewport.addEventListener('resize', fixViewport);
   window.visualViewport.addEventListener('scroll', fixViewport);
 }
 window.addEventListener('resize', fixViewport);
 window.addEventListener('orientationchange', function() {
-  setTimeout(fixViewport, 100);
-  setTimeout(fixViewport, 300);
+  setTimeout(fixViewport, 50);
+  setTimeout(fixViewport, 200);
   setTimeout(fixViewport, 500);
-  hideSafariBar();
 });
+
+// Prevent any accidental scrolling that would show black gaps
+document.addEventListener('touchmove', function(e) {
+  // Allow scrolling inside shot carousel and gallery grid
+  var t = e.target;
+  while (t) {
+    if (t.classList && (t.classList.contains('shot-carousel') || t.classList.contains('gg'))) return;
+    t = t.parentElement;
+  }
+  e.preventDefault();
+}, { passive: false });
 
 // Initial
 fixViewport();
-hideSafariBar();
-
-// Scroll trick: scrolling down hides Safari's address bar on iOS
-// Requires body to be taller than viewport (min-height: calc(100vh + 1px))
-function hideSafariBar() {
-  if (window.navigator.standalone) return;
-  // Multiple attempts with increasing delays for reliability
-  setTimeout(function() { window.scrollTo(0, 1); }, 50);
-  setTimeout(function() { window.scrollTo(0, 1); }, 150);
-  setTimeout(function() { window.scrollTo(0, 1); }, 300);
-  setTimeout(function() { window.scrollTo(0, 1); }, 600);
-  setTimeout(function() { window.scrollTo(0, 1); fixViewport(); }, 800);
-}
-
-// Re-trigger scroll trick whenever user taps the camera area
-// (Safari shows toolbar again on tap sometimes)
-document.addEventListener('touchstart', function(e) {
-  // Only auto-scroll if camera is visible and Safari bar might be showing
-  var cam = q('cam');
-  if (cam && !cam.classList.contains('hidden') && window.scrollY === 0) {
-    setTimeout(function() { window.scrollTo(0, 1); }, 50);
-  }
-}, { passive: true });
-
-// Also re-trigger on any touch end
-document.addEventListener('touchend', function() {
-  if (window.scrollY === 0 && !window.navigator.standalone) {
-    setTimeout(function() { window.scrollTo(0, 1); }, 100);
-  }
-}, { passive: true });
 
 // ===== FULLSCREEN ON CAMERA START =====
 var origStartCam = startCam;
@@ -600,12 +574,10 @@ startCam = function() {
     if (el.requestFullscreen) el.requestFullscreen().catch(function(){});
     else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
   } catch(e) {}
-  hideSafariBar();
   fixViewport();
   origStartCam();
-  // Keep fixing viewport as camera stream loads
-  setTimeout(fixViewport, 500);
-  setTimeout(fixViewport, 1000);
+  setTimeout(fixViewport, 300);
+  setTimeout(fixViewport, 800);
 };
 
 // ===== PWA INSTALL BANNER =====
