@@ -1,7 +1,9 @@
 {
-  "name": "Cámara con Superposición",
-  "short_name": "CámaraCar",
+  "name": "Cámara Pro — AutoDirecto",
+  "short_name": "Cámara Pro",
+  "id": "/",
   "start_url": "/",
+  "scope": "/",
   "display": "fullscreen",
   "orientation": "any",
   "background_color": "#000000",
