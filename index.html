@@ -691,6 +691,37 @@ function capture() {
   S.photos.push({ url:url, label:S.cat + ' - ' + shot.l, time:new Date().toLocaleTimeString() });
   updGal();
   toast('✓ ' + shot.l);
+
+  // ── CRM Upload Bridge ──────────────────────────────────────────────────────
+  // If opened from the CRM with ?appraisal_id=xxx, upload this photo directly
+  // to autodirectocrm.vercel.app so it's permanently saved to the vehicle.
+  (function uploadToCRM(dataUrl, label) {
+    var params = new URLSearchParams(window.location.search);
+    var appraisalId = params.get('appraisal_id');
+    if (!appraisalId) return; // standalone use — no upload needed
+    // Convert base64 dataURL → Blob
+    fetch(dataUrl)
+      .then(function(r) { return r.blob(); })
+      .then(function(blob) {
+        var safeLabel = label.replace(/[^a-z0-9]/gi, '_');
+        var filename  = safeLabel + '_' + Date.now() + '.jpg';
+        var fd = new FormData();
+        fd.append('file', blob, filename);
+        fd.append('appraisal_id', appraisalId);
+        return fetch('https://autodirectocrm.vercel.app/api/inspecciones/fotos', {
+          method: 'POST',
+          headers: { 'X-API-Key': 'mrcar2024' },
+          body: fd
+        });
+      })
+      .then(function(r) { return r.ok ? r.json() : Promise.reject(r.status); })
+      .then(function(d) {
+        if (d && d.ok) toast('☁️ Guardada en vehículo');
+      })
+      .catch(function(e) { console.warn('CRM upload failed', e); });
+  })(url, S.cat + ' - ' + shot.l);
+  // ──────────────────────────────────────────────────────────────────────────
+
   if (S.idx < OV[S.cat].length - 1) {
     setTimeout(function() { pickShot(S.idx + 1); }, 800);
   }
