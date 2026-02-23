@@ -641,7 +641,19 @@ var S = { stream:null, face:'environment', cat:'sedan', idx:0, photos:[], upload
 (function resolveJob() {
   var params = new URLSearchParams(window.location.search);
   var token = params.get('job');
-  if (!token) return; // direct params or standalone without job — nothing to resolve
+
+  // If no token in URL, check localStorage — this is the PWA home screen launch case.
+  // The token was saved by Safari when the CRM opened the URL before the user
+  // switched to the home screen app icon.
+  if (!token) {
+    token = localStorage.getItem('camera-job-token');
+    if (!token) return; // genuinely standalone / no pending job
+  }
+
+  // CRITICAL for iOS PWA: save the token to localStorage NOW (while still in Safari).
+  // When the user opens the app from the home screen, the URL is just "/" but
+  // we can still read this token from localStorage.
+  localStorage.setItem('camera-job-token', token);
 
   // Fetch job from CRM and store params in sessionStorage so the rest of the app
   // can read them via URLSearchParams (we rewrite the URL to include them)
@@ -664,6 +676,8 @@ var S = { stream:null, face:'environment', cat:'sedan', idx:0, photos:[], upload
     })
     .catch(function(e) {
       console.warn('Could not resolve camera job', token, e);
+      // If job not found (already used/expired), clear it
+      if (e === 404) localStorage.removeItem('camera-job-token');
     });
 })();
 
@@ -1480,6 +1494,7 @@ function showDoneOverlay() {
   // Clean up the server-side job token so it can't be reused
   var jobToken = new URLSearchParams(window.location.search).get('job');
   if (jobToken) {
+    localStorage.removeItem('camera-job-token');
     fetch('https://autodirectocrm.vercel.app/api/camera-job/' + jobToken, { method: 'DELETE' })
       .catch(function() {});
   }
