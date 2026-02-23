@@ -435,6 +435,36 @@
     .int-btn-no:active { background:rgba(255,255,255,0.2); }
     .int-ext-thumbs { display:flex; gap:6px; flex-wrap:wrap; justify-content:center; margin-bottom:28px; max-width:340px; }
     .int-ext-thumb  { width:44px; height:44px; border-radius:8px; object-fit:cover; border:2px solid rgba(59,130,246,0.5); }
+
+    /* ── Vehicle Confirm overlay ───────────────────────────── */
+    #vehicle-confirm {
+      position:fixed; top:0; left:0; width:100%; height:var(--app-h,100vh);
+      background:#000; z-index:200;
+      display:none; flex-direction:column;
+      align-items:center; justify-content:center;
+      padding:40px 28px; text-align:center;
+    }
+    #vehicle-confirm.visible { display:flex; }
+    .vc-icon  { font-size:56px; margin-bottom:20px; }
+    .vc-from  { font-size:11px; text-transform:uppercase; letter-spacing:0.12em; color:rgba(255,255,255,0.3); margin-bottom:6px; }
+    .vc-label { font-size:22px; font-weight:700; color:#fff; margin-bottom:6px; line-height:1.3; max-width:300px; }
+    .vc-sub   { font-size:14px; color:rgba(255,255,255,0.45); margin-bottom:40px; line-height:1.5; }
+    .vc-btn-yes {
+      width:100%; max-width:320px;
+      background:#22c55e; color:#000; border:none;
+      padding:18px 24px; border-radius:16px;
+      font-size:17px; font-weight:700; cursor:pointer;
+      margin-bottom:12px; transition:transform 0.1s, background 0.2s;
+    }
+    .vc-btn-yes:active { transform:scale(0.97); background:#16a34a; }
+    .vc-btn-no {
+      width:100%; max-width:320px;
+      background:rgba(255,255,255,0.08); color:rgba(255,255,255,0.45); border:1px solid rgba(255,255,255,0.1);
+      padding:14px 24px; border-radius:16px;
+      font-size:14px; cursor:pointer;
+      transition:background 0.2s;
+    }
+    .vc-btn-no:active { background:rgba(255,255,255,0.15); }
   </style>
 </head>
 <body>
@@ -590,6 +620,16 @@
   </button>
 </div>
 
+<!-- VEHICLE CONFIRM — shown when CRM sends a job token, asks "is this the right car?" -->
+<div id="vehicle-confirm">
+  <div class="vc-icon">🚗</div>
+  <div class="vc-from">Solicitud del CRM</div>
+  <div class="vc-label" id="vc-label">Cargando vehículo…</div>
+  <div class="vc-sub">¿Vas a tomar fotos para este vehículo?</div>
+  <button class="vc-btn-yes" id="vc-yes-btn">📷 Sí, empezar</button>
+  <button class="vc-btn-no"  id="vc-no-btn">No es este vehículo</button>
+</div>
+
 <canvas id="cv" style="display:none"></canvas>
 
 <script>
@@ -643,40 +683,38 @@ var S = { stream:null, face:'environment', cat:'sedan', idx:0, photos:[], upload
   var token = params.get('job');
 
   // If no token in URL, check localStorage — this is the PWA home screen launch case.
-  // The token was saved by Safari when the CRM opened the URL before the user
-  // switched to the home screen app icon.
   if (!token) {
     token = localStorage.getItem('camera-job-token');
     if (!token) return; // genuinely standalone / no pending job
   }
 
-  // CRITICAL for iOS PWA: save the token to localStorage NOW (while still in Safari).
-  // When the user opens the app from the home screen, the URL is just "/" but
-  // we can still read this token from localStorage.
+  // Save token to localStorage so PWA home-screen re-launch can find it.
   localStorage.setItem('camera-job-token', token);
 
-  // Fetch job from CRM and store params in sessionStorage so the rest of the app
-  // can read them via URLSearchParams (we rewrite the URL to include them)
+  // Fetch job from CRM
   fetch('https://autodirectocrm.vercel.app/api/camera-job/' + token)
     .then(function(r) { return r.ok ? r.json() : Promise.reject(r.status); })
     .then(function(job) {
-      // Build new URL with the real params and replace history entry
+      // Rewrite URL with real params so upload bridge reads them via URLSearchParams
       var newParams = new URLSearchParams();
-      newParams.set('job', token); // keep token so upload bridge can still read consignacion_id
+      newParams.set('job', token);
       if (job.consignacion_id) newParams.set('consignacion_id', job.consignacion_id);
       if (job.appraisal_id)    newParams.set('appraisal_id', job.appraisal_id);
-      var newUrl = window.location.pathname + '?' + newParams.toString();
-      history.replaceState(null, '', newUrl);
+      history.replaceState(null, '', window.location.pathname + '?' + newParams.toString());
 
-      // Show vehicle label on permission screen
-      if (job.label) {
-        var tip = document.getElementById('perm-tip');
-        if (tip) tip.textContent = '🚗 ' + job.label;
-      }
+      // Show the vehicle confirmation screen
+      var label = job.label || 'Vehículo';
+      var vcLabel = document.getElementById('vc-label');
+      if (vcLabel) vcLabel.textContent = label;
+      // Also update the permission screen tip (in case confirm is dismissed)
+      var tip = document.getElementById('perm-tip');
+      if (tip) tip.textContent = '🚗 ' + label;
+
+      // Show confirm screen on top of everything
+      document.getElementById('vehicle-confirm').classList.add('visible');
     })
     .catch(function(e) {
       console.warn('Could not resolve camera job', token, e);
-      // If job not found (already used/expired), clear it
       if (e === 404) localStorage.removeItem('camera-job-token');
     });
 })();
@@ -1443,8 +1481,9 @@ function showInteriorPrompt() {
 function updateDoneStatus() {
   var overlay = q('done-overlay');
   if (!overlay.classList.contains('visible')) return;
-  var appraisalId = new URLSearchParams(window.location.search).get('appraisal_id');
-  if (!appraisalId) return;
+  var params = new URLSearchParams(window.location.search);
+  var linkedToCRM = params.get('consignacion_id') || params.get('appraisal_id');
+  if (!linkedToCRM) return;
   var n = S.photos.length;
   var statusEl = q('done-upload-status');
   if (S.uploadedCount >= n) {
@@ -1458,14 +1497,15 @@ function updateDoneStatus() {
 
 function showDoneOverlay() {
   var n = S.photos.length;
-  var appraisalId = new URLSearchParams(window.location.search).get('appraisal_id');
+  var params = new URLSearchParams(window.location.search);
+  var linkedToCRM = params.get('consignacion_id') || params.get('appraisal_id');
 
   // Photo count text
   q('done-count-text').textContent = n + ' foto' + (n !== 1 ? 's' : '') + ' tomada' + (n !== 1 ? 's' : '');
 
   // Upload status
   var statusEl = q('done-upload-status');
-  if (appraisalId) {
+  if (linkedToCRM) {
     if (S.uploadedCount >= n) {
       statusEl.innerHTML = '☁️ <strong>' + n + '</strong> foto' + (n !== 1 ? 's' : '') + ' guardada' + (n !== 1 ? 's' : '') + ' en el vehículo ✔';
       statusEl.style.color = '#4ade80';
@@ -1563,10 +1603,12 @@ q('g-clear').onclick = function() {
 
 // Done overlay buttons
 q('done-back-btn').onclick = function() {
-  var appraisalId = new URLSearchParams(window.location.search).get('appraisal_id');
-  if (appraisalId) {
+  var params = new URLSearchParams(window.location.search);
+  var linkedToCRM = params.get('consignacion_id') || params.get('appraisal_id');
+  if (linkedToCRM) {
+    // Try to close the tab (works if opened by CRM via window.open)
     window.close();
-    // Fallback: if window.close() is blocked (tab opened via link, not script)
+    // Fallback: navigate back to CRM if close is blocked
     setTimeout(function() {
       window.location.href = 'https://autodirectocrm.vercel.app';
     }, 400);
@@ -1576,6 +1618,18 @@ q('done-back-btn').onclick = function() {
 };
 q('done-more-btn').onclick = function() {
   q('done-overlay').classList.remove('visible');
+};
+
+// Vehicle confirm buttons
+q('vc-yes-btn').onclick = function() {
+  q('vehicle-confirm').classList.remove('visible');
+  // Camera permission screen is already showing — user just taps "Iniciar Cámara" next
+};
+q('vc-no-btn').onclick = function() {
+  // Clear the job so we run in standalone mode
+  localStorage.removeItem('camera-job-token');
+  history.replaceState(null, '', window.location.pathname);
+  q('vehicle-confirm').classList.remove('visible');
 };
 
 // Interior prompt buttons
