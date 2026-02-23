@@ -673,67 +673,43 @@ var OV = {
   ]
 };
 
-var S = { stream:null, face:'environment', cat:'sedan', idx:0, photos:[], uploadedCount:0, uploadingCount:0 };
+var S = { stream:null, face:'environment', cat:'sedan', idx:0, photos:[], uploadedCount:0, uploadingCount:0, jobToken:null };
 
-// ── Job resolution: supports ?job=TOKEN (PWA home-screen launch) ─────────────
-// Also supports direct ?consignacion_id= and ?appraisal_id= for browser use.
-// On PWA launch the URL is always start_url="/", so we use a server-side token.
+// ── Job resolution: on every launch, ask CRM for the latest pending job ───────
+// No localStorage, no URL tokens needed. Works from home screen icon directly.
+// A job is "pending" when photos_uploaded = 0. Once we upload photos it's done.
 (function resolveJob() {
-  var params = new URLSearchParams(window.location.search);
-  var token = params.get('job');
-
-  // If no token in URL, check localStorage — this is the PWA home screen launch case.
-  if (!token) {
-    token = localStorage.getItem('camera-job-token');
-    if (!token) {
-      // Show debug info on perm screen so we know what's in storage
-      var tip = document.getElementById('perm-tip');
-      if (tip) tip.textContent = '⚠️ Sin trabajo pendiente (standalone)';
-      return;
-    }
-  }
-
-  // Save token to localStorage so PWA home-screen re-launch can find it.
-  localStorage.setItem('camera-job-token', token);
-
-  // IMMEDIATELY show the confirm screen with loading state — don't wait for fetch.
-  // This way the user sees something right away even if the network is slow.
-  var vcLabel = document.getElementById('vc-label');
-  if (vcLabel) vcLabel.textContent = 'Cargando vehículo…';
-  document.getElementById('vehicle-confirm').classList.add('visible');
-
-  // Debug: show token on perm screen too
   var tip = document.getElementById('perm-tip');
-  if (tip) tip.textContent = '🔑 Token: ' + token.slice(0, 8) + '…';
+  var vcLabel = document.getElementById('vc-label');
 
-  // Fetch job from CRM
-  fetch('https://autodirectocrm.vercel.app/api/camera-job/' + token)
-    .then(function(r) {
-      if (tip) tip.textContent = '📡 HTTP ' + r.status + ' token=' + token.slice(0,8);
-      return r.ok ? r.json() : Promise.reject(r.status);
-    })
+  fetch('https://autodirectocrm.vercel.app/api/camera-job/latest')
+    .then(function(r) { return r.ok ? r.json() : Promise.reject(r.status); })
     .then(function(job) {
-      // Rewrite URL with real params so upload bridge reads them via URLSearchParams
+      if (!job.pending) {
+        if (tip) tip.textContent = '📷 Sin trabajo pendiente';
+        return; // no pending job — standalone mode, just take photos normally
+      }
+
+      // Store job data in S so upload bridge can use it
+      S.jobToken        = job.token;
+      S.consignacionId  = job.consignacion_id;
+      S.appraisalId     = job.appraisal_id;
+
+      // Rewrite URL so upload bridge reads consignacion_id from URLSearchParams
       var newParams = new URLSearchParams();
-      newParams.set('job', token);
       if (job.consignacion_id) newParams.set('consignacion_id', job.consignacion_id);
       if (job.appraisal_id)    newParams.set('appraisal_id', job.appraisal_id);
       history.replaceState(null, '', window.location.pathname + '?' + newParams.toString());
 
-      // Update confirm screen with real vehicle label
+      // Show confirm screen immediately with vehicle name
       var label = job.label || 'Vehículo';
       if (vcLabel) vcLabel.textContent = label;
-      if (tip) tip.textContent = '🚗 ' + label + ' · cid=' + (job.consignacion_id || '?');
+      if (tip) tip.textContent = '🚗 ' + label;
+      document.getElementById('vehicle-confirm').classList.add('visible');
     })
     .catch(function(e) {
-      console.warn('Could not resolve camera job', token, e);
-      if (vcLabel) vcLabel.textContent = '❌ Error cargando trabajo (' + e + ')';
-      if (tip) tip.textContent = '❌ Fetch falló: ' + e;
-      // Only clear token if job was explicitly deleted (404)
-      if (e === 404) {
-        localStorage.removeItem('camera-job-token');
-        document.getElementById('vehicle-confirm').classList.remove('visible');
-      }
+      if (tip) tip.textContent = '⚠️ Sin conexión al CRM (' + e + ')';
+      console.warn('resolveJob failed', e);
     });
 })();
 
@@ -954,6 +930,11 @@ function capture() {
           S.uploadedCount++;
           toast('☁️ Guardada en vehículo');
           updateDoneStatus();
+          // Mark job as having photos so it won't show again as pending
+          if (S.jobToken) {
+            fetch('https://autodirectocrm.vercel.app/api/camera-job/' + S.jobToken + '/increment', { method: 'POST' })
+              .catch(function(){});
+          }
         }
       })
       .catch(function(e) { console.warn('CRM upload failed', e); });
@@ -1549,13 +1530,7 @@ function showDoneOverlay() {
   // Haptic feedback
   if (navigator.vibrate) navigator.vibrate([100, 50, 100, 50, 200]);
 
-  // Clean up the server-side job token so it can't be reused
-  var jobToken = new URLSearchParams(window.location.search).get('job');
-  if (jobToken) {
-    localStorage.removeItem('camera-job-token');
-    fetch('https://autodirectocrm.vercel.app/api/camera-job/' + jobToken, { method: 'DELETE' })
-      .catch(function() {});
-  }
+  // Job is marked as done via photos_uploaded counter — no extra cleanup needed
 }
 
 function dlP(i) {
