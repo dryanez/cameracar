@@ -635,6 +635,38 @@ var OV = {
 
 var S = { stream:null, face:'environment', cat:'sedan', idx:0, photos:[], uploadedCount:0, uploadingCount:0 };
 
+// ── Job resolution: supports ?job=TOKEN (PWA home-screen launch) ─────────────
+// Also supports direct ?consignacion_id= and ?appraisal_id= for browser use.
+// On PWA launch the URL is always start_url="/", so we use a server-side token.
+(function resolveJob() {
+  var params = new URLSearchParams(window.location.search);
+  var token = params.get('job');
+  if (!token) return; // direct params or standalone without job — nothing to resolve
+
+  // Fetch job from CRM and store params in sessionStorage so the rest of the app
+  // can read them via URLSearchParams (we rewrite the URL to include them)
+  fetch('https://autodirectocrm.vercel.app/api/camera-job/' + token)
+    .then(function(r) { return r.ok ? r.json() : Promise.reject(r.status); })
+    .then(function(job) {
+      // Build new URL with the real params and replace history entry
+      var newParams = new URLSearchParams();
+      newParams.set('job', token); // keep token so upload bridge can still read consignacion_id
+      if (job.consignacion_id) newParams.set('consignacion_id', job.consignacion_id);
+      if (job.appraisal_id)    newParams.set('appraisal_id', job.appraisal_id);
+      var newUrl = window.location.pathname + '?' + newParams.toString();
+      history.replaceState(null, '', newUrl);
+
+      // Show vehicle label on permission screen
+      if (job.label) {
+        var tip = document.getElementById('perm-tip');
+        if (tip) tip.textContent = '🚗 ' + job.label;
+      }
+    })
+    .catch(function(e) {
+      console.warn('Could not resolve camera job', token, e);
+    });
+})();
+
 function q(id) { return document.getElementById(id); }
 
 // Camera
@@ -1444,6 +1476,13 @@ function showDoneOverlay() {
 
   // Haptic feedback
   if (navigator.vibrate) navigator.vibrate([100, 50, 100, 50, 200]);
+
+  // Clean up the server-side job token so it can't be reused
+  var jobToken = new URLSearchParams(window.location.search).get('job');
+  if (jobToken) {
+    fetch('https://autodirectocrm.vercel.app/api/camera-job/' + jobToken, { method: 'DELETE' })
+      .catch(function() {});
+  }
 }
 
 function dlP(i) {
@@ -1654,7 +1693,7 @@ document.addEventListener('webkitfullscreenchange', function() {
     || window.matchMedia('(display-mode: fullscreen)').matches;
 
   var params = new URLSearchParams(window.location.search);
-  var fromCRM = params.get('consignacion_id') || params.get('appraisal_id');
+  var fromCRM = params.get('consignacion_id') || params.get('appraisal_id') || params.get('job');
   var dismissed = sessionStorage.getItem('pwa-gate-dismissed'); // only for this session
   var savedInstallPrompt = null;
 
