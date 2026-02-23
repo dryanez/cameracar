@@ -779,13 +779,20 @@ function capture() {
   toast('✓ ' + shot.l);
 
   // ── CRM Upload Bridge ──────────────────────────────────────────────────────
-  // If opened from the CRM with ?appraisal_id=xxx, upload this photo directly
-  // to autodirectocrm.vercel.app so it's permanently saved to the vehicle.
+  // If opened from the CRM with ?appraisal_id=xxx or ?consignacion_id=xxx,
+  // upload this photo directly to autodirectocrm.vercel.app.
   (function uploadToCRM(dataUrl, label) {
     var params = new URLSearchParams(window.location.search);
-    var appraisalId = params.get('appraisal_id');
-    if (!appraisalId) return; // standalone use — no upload needed
+    var appraisalId     = params.get('appraisal_id');
+    var consignacionId  = params.get('consignacion_id');
+    if (!appraisalId && !consignacionId) return; // standalone use — no upload needed
     S.uploadingCount++;
+
+    // Decide endpoint: consignacion_id route auto-creates appraisal UUID if needed
+    var uploadUrl = appraisalId
+      ? 'https://autodirectocrm.vercel.app/api/inspecciones/fotos'
+      : 'https://autodirectocrm.vercel.app/api/consignaciones/' + consignacionId + '/fotos';
+
     // Convert base64 dataURL → Blob
     fetch(dataUrl)
       .then(function(r) { return r.blob(); })
@@ -794,8 +801,8 @@ function capture() {
         var filename  = safeLabel + '_' + Date.now() + '.jpg';
         var fd = new FormData();
         fd.append('file', blob, filename);
-        fd.append('appraisal_id', appraisalId);
-        return fetch('https://autodirectocrm.vercel.app/api/inspecciones/fotos', {
+        if (appraisalId) fd.append('appraisal_id', appraisalId);
+        return fetch(uploadUrl, {
           method: 'POST',
           headers: { 'X-API-Key': 'mrcar2024' },
           body: fd
