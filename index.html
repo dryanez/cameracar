@@ -370,6 +370,40 @@
       border:1px solid rgba(255,255,255,0.1);
     }
     .toast.show { transform:translateX(-50%) translateY(0); }
+
+    /* ===== DONE OVERLAY ===== */
+    #done-overlay {
+      position:fixed; top:0; left:0; width:100%; height:var(--app-h,100vh);
+      background:rgba(0,0,0,0.92); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+      z-index:95; display:none; flex-direction:column;
+      align-items:center; justify-content:center;
+      padding:40px 28px; text-align:center;
+    }
+    #done-overlay.visible { display:flex; }
+    .done-check { font-size:64px; margin-bottom:16px; animation: pop-in 0.4s cubic-bezier(0.175,0.885,0.32,1.275); }
+    @keyframes pop-in { 0%{transform:scale(0);opacity:0;} 100%{transform:scale(1);opacity:1;} }
+    .done-title { font-size:28px; font-weight:700; margin-bottom:8px; }
+    .done-sub { font-size:15px; color:rgba(255,255,255,0.5); margin-bottom:6px; line-height:1.5; }
+    .done-upload-status { font-size:14px; color:rgba(255,255,255,0.4); margin-bottom:32px; min-height:20px; }
+    .done-upload-status .ok { color:#34d399; }
+    .done-btn-primary {
+      width:100%; max-width:320px;
+      background:#22c55e; color:#000; border:none;
+      padding:18px 24px; border-radius:16px;
+      font-size:17px; font-weight:700; cursor:pointer;
+      margin-bottom:12px; transition:transform 0.1s, background 0.2s;
+    }
+    .done-btn-primary:active { transform:scale(0.97); background:#16a34a; }
+    .done-btn-secondary {
+      width:100%; max-width:320px;
+      background:rgba(255,255,255,0.1); color:#fff; border:none;
+      padding:14px 24px; border-radius:16px;
+      font-size:15px; font-weight:500; cursor:pointer;
+      transition:background 0.2s;
+    }
+    .done-btn-secondary:active { background:rgba(255,255,255,0.2); }
+    .done-thumbs { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; margin-bottom:24px; max-width:340px; }
+    .done-thumb { width:52px; height:52px; border-radius:10px; object-fit:cover; border:2px solid rgba(40,220,80,0.5); }
   </style>
 </head>
 <body>
@@ -454,6 +488,17 @@
 
 <div class="toast" id="toast"></div>
 
+<!-- DONE OVERLAY — shown when all shots are captured -->
+<div id="done-overlay">
+  <div class="done-check">✅</div>
+  <div class="done-title">¡Fotos listas!</div>
+  <div class="done-sub" id="done-count-text">Todas las fotos fueron tomadas.</div>
+  <div class="done-upload-status" id="done-upload-status"></div>
+  <div class="done-thumbs" id="done-thumbs"></div>
+  <button class="done-btn-primary" id="done-back-btn">← Volver al CRM</button>
+  <button class="done-btn-secondary" id="done-more-btn">📷 Tomar más fotos</button>
+</div>
+
 <!-- PWA Install Banner -->
 <div id="pwa-banner" style="display:none; position:fixed; bottom:0; left:0; right:0; z-index:200; background:rgba(30,30,30,0.97); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); padding:14px 16px; padding-bottom:max(env(safe-area-inset-bottom,14px),18px); border-top:1px solid rgba(255,255,255,0.1);">
   <div style="display:flex; align-items:center; gap:12px; max-width:500px; margin:0 auto;">
@@ -509,7 +554,7 @@ var OV = {
   ]
 };
 
-var S = { stream:null, face:'environment', cat:'sedan', idx:0, photos:[] };
+var S = { stream:null, face:'environment', cat:'sedan', idx:0, photos:[], uploadedCount:0, uploadingCount:0 };
 
 function q(id) { return document.getElementById(id); }
 
@@ -699,6 +744,7 @@ function capture() {
     var params = new URLSearchParams(window.location.search);
     var appraisalId = params.get('appraisal_id');
     if (!appraisalId) return; // standalone use — no upload needed
+    S.uploadingCount++;
     // Convert base64 dataURL → Blob
     fetch(dataUrl)
       .then(function(r) { return r.blob(); })
@@ -716,7 +762,11 @@ function capture() {
       })
       .then(function(r) { return r.ok ? r.json() : Promise.reject(r.status); })
       .then(function(d) {
-        if (d && d.ok) toast('☁️ Guardada en vehículo');
+        if (d && d.ok) {
+          S.uploadedCount++;
+          toast('☁️ Guardada en vehículo');
+          updateDoneStatus();
+        }
       })
       .catch(function(e) { console.warn('CRM upload failed', e); });
   })(url, S.cat + ' - ' + shot.l);
@@ -724,6 +774,9 @@ function capture() {
 
   if (S.idx < OV[S.cat].length - 1) {
     setTimeout(function() { pickShot(S.idx + 1); }, 800);
+  } else {
+    // Last shot of this category — show done overlay after brief delay
+    setTimeout(showDoneOverlay, 1200);
   }
 }
 
@@ -1236,6 +1289,58 @@ function showGal() {
   }
 }
 
+function updateDoneStatus() {
+  var overlay = q('done-overlay');
+  if (!overlay.classList.contains('visible')) return;
+  var appraisalId = new URLSearchParams(window.location.search).get('appraisal_id');
+  if (!appraisalId) return;
+  var n = S.photos.length;
+  var statusEl = q('done-upload-status');
+  if (S.uploadedCount >= n) {
+    statusEl.innerHTML = '☁️ <strong>' + n + '</strong> foto' + (n !== 1 ? 's' : '') + ' guardada' + (n !== 1 ? 's' : '') + ' en el vehículo ✔';
+    statusEl.style.color = '#4ade80';
+  } else {
+    statusEl.innerHTML = '☁️ Subiendo… ' + S.uploadedCount + ' / ' + n;
+    statusEl.style.color = '#fbbf24';
+  }
+}
+
+function showDoneOverlay() {
+  var n = S.photos.length;
+  var appraisalId = new URLSearchParams(window.location.search).get('appraisal_id');
+
+  // Photo count text
+  q('done-count-text').textContent = n + ' foto' + (n !== 1 ? 's' : '') + ' tomada' + (n !== 1 ? 's' : '');
+
+  // Upload status
+  var statusEl = q('done-upload-status');
+  if (appraisalId) {
+    if (S.uploadedCount >= n) {
+      statusEl.innerHTML = '☁️ <strong>' + n + '</strong> foto' + (n !== 1 ? 's' : '') + ' guardada' + (n !== 1 ? 's' : '') + ' en el vehículo ✔';
+      statusEl.style.color = '#4ade80';
+    } else {
+      statusEl.innerHTML = '☁️ Subiendo… ' + S.uploadedCount + ' / ' + n;
+      statusEl.style.color = '#fbbf24';
+    }
+  } else {
+    statusEl.textContent = '';
+  }
+
+  // Thumbnail strip — show last 6 photos
+  var html = '';
+  var start = Math.max(0, S.photos.length - 6);
+  for (var i = start; i < S.photos.length; i++) {
+    html += '<img class="done-thumb" src="' + S.photos[i].url + '" alt="' + S.photos[i].label + '">';
+  }
+  q('done-thumbs').innerHTML = html;
+
+  // Show overlay
+  q('done-overlay').classList.add('visible');
+
+  // Haptic feedback
+  if (navigator.vibrate) navigator.vibrate([100, 50, 100, 50, 200]);
+}
+
 function dlP(i) {
   var p = S.photos[i];
   var a = document.createElement('a');
@@ -1295,6 +1400,23 @@ q('gp').onclick = showGal;
 q('g-back').onclick = function() { q('gallery').classList.remove('visible'); };
 q('g-clear').onclick = function() {
   if (confirm('¿Borrar todas las fotos?')) { S.photos = []; updGal(); showGal(); toast('Borradas'); }
+};
+
+// Done overlay buttons
+q('done-back-btn').onclick = function() {
+  var appraisalId = new URLSearchParams(window.location.search).get('appraisal_id');
+  if (appraisalId) {
+    window.close();
+    // Fallback: if window.close() is blocked (tab opened via link, not script)
+    setTimeout(function() {
+      window.location.href = 'https://autodirectocrm.vercel.app';
+    }, 400);
+  } else {
+    window.history.back();
+  }
+};
+q('done-more-btn').onclick = function() {
+  q('done-overlay').classList.remove('visible');
 };
 
 q('tabs').onclick = function(e) {
