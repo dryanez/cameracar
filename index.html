@@ -685,15 +685,33 @@ var S = { stream:null, face:'environment', cat:'sedan', idx:0, photos:[], upload
   // If no token in URL, check localStorage — this is the PWA home screen launch case.
   if (!token) {
     token = localStorage.getItem('camera-job-token');
-    if (!token) return; // genuinely standalone / no pending job
+    if (!token) {
+      // Show debug info on perm screen so we know what's in storage
+      var tip = document.getElementById('perm-tip');
+      if (tip) tip.textContent = '⚠️ Sin trabajo pendiente (standalone)';
+      return;
+    }
   }
 
   // Save token to localStorage so PWA home-screen re-launch can find it.
   localStorage.setItem('camera-job-token', token);
 
+  // IMMEDIATELY show the confirm screen with loading state — don't wait for fetch.
+  // This way the user sees something right away even if the network is slow.
+  var vcLabel = document.getElementById('vc-label');
+  if (vcLabel) vcLabel.textContent = 'Cargando vehículo…';
+  document.getElementById('vehicle-confirm').classList.add('visible');
+
+  // Debug: show token on perm screen too
+  var tip = document.getElementById('perm-tip');
+  if (tip) tip.textContent = '🔑 Token: ' + token.slice(0, 8) + '…';
+
   // Fetch job from CRM
   fetch('https://autodirectocrm.vercel.app/api/camera-job/' + token)
-    .then(function(r) { return r.ok ? r.json() : Promise.reject(r.status); })
+    .then(function(r) {
+      if (tip) tip.textContent = '📡 HTTP ' + r.status + ' token=' + token.slice(0,8);
+      return r.ok ? r.json() : Promise.reject(r.status);
+    })
     .then(function(job) {
       // Rewrite URL with real params so upload bridge reads them via URLSearchParams
       var newParams = new URLSearchParams();
@@ -702,20 +720,20 @@ var S = { stream:null, face:'environment', cat:'sedan', idx:0, photos:[], upload
       if (job.appraisal_id)    newParams.set('appraisal_id', job.appraisal_id);
       history.replaceState(null, '', window.location.pathname + '?' + newParams.toString());
 
-      // Show the vehicle confirmation screen
+      // Update confirm screen with real vehicle label
       var label = job.label || 'Vehículo';
-      var vcLabel = document.getElementById('vc-label');
       if (vcLabel) vcLabel.textContent = label;
-      // Also update the permission screen tip (in case confirm is dismissed)
-      var tip = document.getElementById('perm-tip');
-      if (tip) tip.textContent = '🚗 ' + label;
-
-      // Show confirm screen on top of everything
-      document.getElementById('vehicle-confirm').classList.add('visible');
+      if (tip) tip.textContent = '🚗 ' + label + ' · cid=' + (job.consignacion_id || '?');
     })
     .catch(function(e) {
       console.warn('Could not resolve camera job', token, e);
-      if (e === 404) localStorage.removeItem('camera-job-token');
+      if (vcLabel) vcLabel.textContent = '❌ Error cargando trabajo (' + e + ')';
+      if (tip) tip.textContent = '❌ Fetch falló: ' + e;
+      // Only clear token if job was explicitly deleted (404)
+      if (e === 404) {
+        localStorage.removeItem('camera-job-token');
+        document.getElementById('vehicle-confirm').classList.remove('visible');
+      }
     });
 })();
 
