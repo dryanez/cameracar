@@ -404,6 +404,37 @@
     .done-btn-secondary:active { background:rgba(255,255,255,0.2); }
     .done-thumbs { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; margin-bottom:24px; max-width:340px; }
     .done-thumb { width:52px; height:52px; border-radius:10px; object-fit:cover; border:2px solid rgba(40,220,80,0.5); }
+
+    /* ── Interior prompt overlay ───────────────────────────── */
+    #interior-prompt {
+      position:fixed; top:0; left:0; width:100%; height:var(--app-h,100vh);
+      background:rgba(0,0,0,0.92); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+      z-index:94; display:none; flex-direction:column;
+      align-items:center; justify-content:center;
+      padding:40px 28px; text-align:center;
+    }
+    #interior-prompt.visible { display:flex; }
+    .int-icon  { font-size:56px; margin-bottom:16px; animation: pop-in 0.4s cubic-bezier(0.175,0.885,0.32,1.275); }
+    .int-title { font-size:24px; font-weight:700; color:#fff; margin-bottom:10px; }
+    .int-sub   { font-size:15px; color:rgba(255,255,255,0.55); margin-bottom:36px; line-height:1.5; }
+    .int-btn-yes {
+      width:100%; max-width:320px;
+      background:#3b82f6; color:#fff; border:none;
+      padding:18px 24px; border-radius:16px;
+      font-size:17px; font-weight:700; cursor:pointer;
+      margin-bottom:12px; transition:transform 0.1s, background 0.2s;
+    }
+    .int-btn-yes:active { transform:scale(0.97); background:#2563eb; }
+    .int-btn-no {
+      width:100%; max-width:320px;
+      background:rgba(255,255,255,0.1); color:#fff; border:none;
+      padding:14px 24px; border-radius:16px;
+      font-size:15px; font-weight:500; cursor:pointer;
+      transition:background 0.2s;
+    }
+    .int-btn-no:active { background:rgba(255,255,255,0.2); }
+    .int-ext-thumbs { display:flex; gap:6px; flex-wrap:wrap; justify-content:center; margin-bottom:28px; max-width:340px; }
+    .int-ext-thumb  { width:44px; height:44px; border-radius:8px; object-fit:cover; border:2px solid rgba(59,130,246,0.5); }
   </style>
 </head>
 <body>
@@ -497,6 +528,16 @@
   <div class="done-thumbs" id="done-thumbs"></div>
   <button class="done-btn-primary" id="done-back-btn">← Volver al CRM</button>
   <button class="done-btn-secondary" id="done-more-btn">📷 Tomar más fotos</button>
+</div>
+
+<!-- INTERIOR PROMPT — shown after exterior category finishes -->
+<div id="interior-prompt">
+  <div class="int-icon">🪑</div>
+  <div class="int-title">Exterior listo</div>
+  <div class="int-sub">¿Quieres tomar también las fotos del interior?</div>
+  <div class="int-ext-thumbs" id="int-ext-thumbs"></div>
+  <button class="int-btn-yes" id="int-yes-btn">📷 Sí, tomar interior</button>
+  <button class="int-btn-no"  id="int-no-btn">✓ No, ya terminé</button>
 </div>
 
 <!-- PWA Install Banner -->
@@ -775,8 +816,15 @@ function capture() {
   if (S.idx < OV[S.cat].length - 1) {
     setTimeout(function() { pickShot(S.idx + 1); }, 800);
   } else {
-    // Last shot of this category — show done overlay after brief delay
-    setTimeout(showDoneOverlay, 1200);
+    // Last shot of this category
+    var isExterior = (S.cat === 'sedan' || S.cat === 'suv' || S.cat === 'truck');
+    if (isExterior) {
+      // Ask if they want interior photos too
+      setTimeout(showInteriorPrompt, 1200);
+    } else {
+      // Interior (or any other category) finished — show final done screen
+      setTimeout(showDoneOverlay, 1200);
+    }
   }
 }
 
@@ -1289,6 +1337,18 @@ function showGal() {
   }
 }
 
+function showInteriorPrompt() {
+  // Show thumbnails of exterior photos taken so far (last 6)
+  var html = '';
+  var start = Math.max(0, S.photos.length - 6);
+  for (var i = start; i < S.photos.length; i++) {
+    html += '<img class="int-ext-thumb" src="' + S.photos[i].url + '" alt="' + S.photos[i].label + '">';
+  }
+  q('int-ext-thumbs').innerHTML = html;
+  q('interior-prompt').classList.add('visible');
+  if (navigator.vibrate) navigator.vibrate([80, 40, 80]);
+}
+
 function updateDoneStatus() {
   var overlay = q('done-overlay');
   if (!overlay.classList.contains('visible')) return;
@@ -1417,6 +1477,16 @@ q('done-back-btn').onclick = function() {
 };
 q('done-more-btn').onclick = function() {
   q('done-overlay').classList.remove('visible');
+};
+
+// Interior prompt buttons
+q('int-yes-btn').onclick = function() {
+  q('interior-prompt').classList.remove('visible');
+  loadCat('interior');
+};
+q('int-no-btn').onclick = function() {
+  q('interior-prompt').classList.remove('visible');
+  showDoneOverlay();
 };
 
 q('tabs').onclick = function(e) {
