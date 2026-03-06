@@ -524,6 +524,42 @@
     .pl-quick-input::placeholder { color:rgba(255,255,255,0.2); }
     .pl-quick-row { display:flex; gap:10px; }
     .pl-quick-row .pl-quick-input { flex:1; }
+
+    /* ── Existing Photos Prompt ───────────────────────────── */
+    #existing-photos-prompt {
+      position:fixed; top:0; left:0; width:100%; height:var(--app-h,100vh);
+      background:rgba(0,0,0,0.95); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+      z-index:210; display:none; flex-direction:column;
+      align-items:center; justify-content:center;
+      padding:40px 28px; text-align:center;
+    }
+    #existing-photos-prompt.visible { display:flex; }
+    .ep-icon { font-size:52px; margin-bottom:16px; }
+    .ep-title { font-size:22px; font-weight:700; color:#fff; margin-bottom:8px; }
+    .ep-sub { font-size:14px; color:rgba(255,255,255,0.55); margin-bottom:12px; line-height:1.5; max-width:320px; }
+    .ep-thumbs { display:flex; gap:6px; flex-wrap:wrap; justify-content:center; margin-bottom:24px; max-width:340px; }
+    .ep-thumb { width:52px; height:52px; border-radius:10px; object-fit:cover; border:2px solid rgba(59,130,246,0.4); }
+    .ep-btn-add {
+      width:100%; max-width:320px;
+      background:#3b82f6; color:#fff; border:none;
+      padding:18px 24px; border-radius:16px;
+      font-size:17px; font-weight:700; cursor:pointer;
+      margin-bottom:12px; transition:transform 0.1s;
+    }
+    .ep-btn-add:active { transform:scale(0.97); }
+    .ep-btn-new {
+      width:100%; max-width:320px;
+      background:#f59e0b; color:#000; border:none;
+      padding:16px 24px; border-radius:16px;
+      font-size:15px; font-weight:600; cursor:pointer;
+      margin-bottom:12px; transition:transform 0.1s;
+    }
+    .ep-btn-new:active { transform:scale(0.97); }
+    .ep-btn-cancel {
+      width:100%; max-width:320px;
+      background:none; color:rgba(255,255,255,0.35); border:none;
+      padding:12px 24px; font-size:13px; cursor:pointer;
+    }
   </style>
 </head>
 <body>
@@ -716,6 +752,17 @@
   </div>
 
   <button class="pl-btn-skip" id="pl-skip-btn">Continuar sin patente →</button>
+</div>
+
+<!-- EXISTING PHOTOS PROMPT — shown when vehicle already has photos -->
+<div id="existing-photos-prompt">
+  <div class="ep-icon">📸</div>
+  <div class="ep-title">Este vehículo ya tiene fotos</div>
+  <div class="ep-sub" id="ep-sub">Se encontraron fotos existentes. ¿Qué deseas hacer?</div>
+  <div class="ep-thumbs" id="ep-thumbs"></div>
+  <button class="ep-btn-add" id="ep-add-btn">➕ Agregar más fotos</button>
+  <button class="ep-btn-new" id="ep-new-btn">🔄 Tomar fotos nuevas (reemplazar)</button>
+  <button class="ep-btn-cancel" id="ep-cancel-btn">← Volver</button>
 </div>
 
 <canvas id="cv" style="display:none"></canvas>
@@ -956,6 +1003,64 @@ function linkToConsignacion(consigId, appraisalId, label) {
     if (tip) tip.textContent = '📷 Modo libre — fotos no vinculadas';
   });
 })();
+
+// ── Existing Photos Check ────────────────────────────────────────────────────
+// When a consignacion already has photos, ask user what to do before starting camera
+function checkExistingPhotos(consignacionId) {
+  fetch(CRM_BASE + '/api/consignaciones/' + consignacionId + '/photos')
+    .then(function(r) { return r.ok ? r.json() : Promise.reject(r.status); })
+    .then(function(data) {
+      var photos = data.photos || [];
+      if (photos.length === 0) return; // no existing photos, proceed normally
+
+      // Show the existing photos prompt
+      var sub = document.getElementById('ep-sub');
+      sub.textContent = 'Este vehículo ya tiene ' + photos.length + ' foto' + (photos.length !== 1 ? 's' : '') + '. ¿Qué deseas hacer?';
+
+      // Show thumbnail previews (last 6)
+      var thumbsEl = document.getElementById('ep-thumbs');
+      var html = '';
+      var start = Math.max(0, photos.length - 6);
+      for (var i = start; i < photos.length; i++) {
+        if (photos[i].url) {
+          html += '<img class="ep-thumb" src="' + photos[i].url + '" alt="Foto ' + (i+1) + '">';
+        }
+      }
+      thumbsEl.innerHTML = html;
+
+      document.getElementById('existing-photos-prompt').classList.add('visible');
+    })
+    .catch(function(e) {
+      console.warn('checkExistingPhotos failed', e);
+      // Can't check — just proceed normally
+    });
+}
+
+// Existing photos prompt buttons
+document.getElementById('ep-add-btn').addEventListener('click', function() {
+  // Keep existing photos, just add more — proceed to camera
+  document.getElementById('existing-photos-prompt').classList.remove('visible');
+  // Permission screen is showing, user taps "Iniciar Cámara"
+});
+
+document.getElementById('ep-new-btn').addEventListener('click', function() {
+  // Replace photos — delete old ones from Supabase, then proceed
+  document.getElementById('existing-photos-prompt').classList.remove('visible');
+  var params = new URLSearchParams(window.location.search);
+  var cid = params.get('consignacion_id');
+  if (cid) {
+    // Delete old photos via API
+    fetch(CRM_BASE + '/api/consignaciones/' + cid + '/photos', { method: 'DELETE' })
+      .then(function() { toast('🗑️ Fotos anteriores eliminadas'); })
+      .catch(function() { console.warn('delete old photos failed'); });
+  }
+});
+
+document.getElementById('ep-cancel-btn').addEventListener('click', function() {
+  document.getElementById('existing-photos-prompt').classList.remove('visible');
+  // Go back to vehicle confirm
+  document.getElementById('vehicle-confirm').classList.add('visible');
+});
 
 function q(id) { return document.getElementById(id); }
 
@@ -1860,7 +1965,13 @@ q('done-more-btn').onclick = function() {
 // Vehicle confirm buttons
 q('vc-yes-btn').onclick = function() {
   q('vehicle-confirm').classList.remove('visible');
-  // Camera permission screen is already showing — user just taps "Iniciar Cámara" next
+  // Check if this consignacion already has photos
+  var params = new URLSearchParams(window.location.search);
+  var cid = params.get('consignacion_id');
+  if (cid) {
+    checkExistingPhotos(cid);
+  }
+  // Camera permission screen is already showing — user taps "Iniciar Cámara" next
 };
 q('vc-no-btn').onclick = function() {
   // Clear the job and show patente login so user can pick a different car
