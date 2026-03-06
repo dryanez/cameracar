@@ -465,6 +465,65 @@
       transition:background 0.2s;
     }
     .vc-btn-no:active { background:rgba(255,255,255,0.15); }
+
+    /* ── Patente Login Screen ─────────────────────────────── */
+    #patente-login {
+      position:fixed; top:0; left:0; width:100%; height:var(--app-h,100vh);
+      background:#000; z-index:190;
+      display:none; flex-direction:column;
+      align-items:center; justify-content:center;
+      padding:40px 28px; text-align:center;
+    }
+    #patente-login.visible { display:flex; }
+    .pl-icon { font-size:52px; margin-bottom:16px; }
+    .pl-title { font-size:24px; font-weight:700; color:#fff; margin-bottom:8px; }
+    .pl-sub { font-size:14px; color:rgba(255,255,255,0.5); margin-bottom:28px; line-height:1.5; max-width:300px; }
+    .pl-input-wrap {
+      width:100%; max-width:320px; margin-bottom:16px;
+    }
+    .pl-input {
+      width:100%; padding:18px 20px; border-radius:14px;
+      border:2px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.06);
+      color:#fff; font-size:22px; font-weight:700; text-align:center;
+      letter-spacing:0.15em; text-transform:uppercase;
+      outline:none; transition:border-color 0.2s;
+    }
+    .pl-input::placeholder { color:rgba(255,255,255,0.25); font-weight:400; letter-spacing:0.05em; font-size:16px; }
+    .pl-input:focus { border-color:rgba(34,197,94,0.6); }
+    .pl-btn {
+      width:100%; max-width:320px;
+      background:#22c55e; color:#000; border:none;
+      padding:18px 24px; border-radius:16px;
+      font-size:17px; font-weight:700; cursor:pointer;
+      margin-bottom:12px; transition:transform 0.1s, background 0.2s, opacity 0.2s;
+    }
+    .pl-btn:active { transform:scale(0.97); background:#16a34a; }
+    .pl-btn:disabled { opacity:0.4; cursor:default; }
+    .pl-btn-skip {
+      width:100%; max-width:320px;
+      background:none; color:rgba(255,255,255,0.35); border:none;
+      padding:12px 24px; font-size:13px; cursor:pointer;
+    }
+    .pl-status { font-size:13px; color:rgba(255,255,255,0.4); margin-bottom:16px; min-height:20px; }
+    .pl-status.ok { color:#4ade80; }
+    .pl-status.err { color:#f87171; }
+
+    /* Quick form (shown when plate not found) */
+    .pl-quick-form {
+      width:100%; max-width:320px;
+      display:none; flex-direction:column; gap:10px;
+      margin-bottom:16px; text-align:left;
+    }
+    .pl-quick-form.visible { display:flex; }
+    .pl-quick-form label { font-size:12px; color:rgba(255,255,255,0.45); margin-bottom:-6px; }
+    .pl-quick-input {
+      width:100%; padding:14px 16px; border-radius:12px;
+      border:1px solid rgba(255,255,255,0.12); background:rgba(255,255,255,0.06);
+      color:#fff; font-size:15px; outline:none;
+    }
+    .pl-quick-input::placeholder { color:rgba(255,255,255,0.2); }
+    .pl-quick-row { display:flex; gap:10px; }
+    .pl-quick-row .pl-quick-input { flex:1; }
   </style>
 </head>
 <body>
@@ -630,6 +689,35 @@
   <button class="vc-btn-no"  id="vc-no-btn">No es este vehículo</button>
 </div>
 
+<!-- PATENTE LOGIN — shown when no pending job, user enters plate to find/create consignacion -->
+<div id="patente-login">
+  <div class="pl-icon">🔑</div>
+  <div class="pl-title">Ingresa la Patente</div>
+  <div class="pl-sub">Escribe la patente del vehículo para vincular las fotos a la consignación.</div>
+  <div class="pl-input-wrap">
+    <input type="text" class="pl-input" id="pl-plate" placeholder="Ej: BBCL45" maxlength="8" autocomplete="off" autocapitalize="characters" spellcheck="false">
+  </div>
+  <div class="pl-status" id="pl-status"></div>
+  <button class="pl-btn" id="pl-search-btn" disabled>🔍 Buscar Consignación</button>
+
+  <!-- Quick form for creating new consignacion (hidden by default) -->
+  <div class="pl-quick-form" id="pl-quick-form">
+    <label>Dueño (opcional)</label>
+    <input type="text" class="pl-quick-input" id="pl-owner" placeholder="Nombre del dueño">
+    <label>Teléfono (opcional)</label>
+    <input type="tel" class="pl-quick-input" id="pl-phone" placeholder="+56 9 1234 5678">
+    <label>Vehículo</label>
+    <div class="pl-quick-row">
+      <input type="text" class="pl-quick-input" id="pl-make" placeholder="Marca">
+      <input type="text" class="pl-quick-input" id="pl-model" placeholder="Modelo">
+    </div>
+    <input type="number" class="pl-quick-input" id="pl-year" placeholder="Año" min="1990" max="2030" style="max-width:120px;">
+    <button class="pl-btn" id="pl-create-btn" style="margin-top:8px;">✅ Crear y Empezar</button>
+  </div>
+
+  <button class="pl-btn-skip" id="pl-skip-btn">Continuar sin patente →</button>
+</div>
+
 <canvas id="cv" style="display:none"></canvas>
 
 <script>
@@ -675,19 +763,29 @@ var OV = {
 
 var S = { stream:null, face:'environment', cat:'sedan', idx:0, photos:[], uploadedCount:0, uploadingCount:0, jobToken:null };
 
+var CRM_BASE = 'https://autodirectocrm.vercel.app';
+
 // ── Job resolution: on every launch, ask CRM for the latest pending job ───────
-// No localStorage, no URL tokens needed. Works from home screen icon directly.
-// A job is "pending" when photos_uploaded = 0. Once we upload photos it's done.
+// If no pending job → show patente login screen so user can find/create one.
 (function resolveJob() {
   var tip = document.getElementById('perm-tip');
   var vcLabel = document.getElementById('vc-label');
 
-  fetch('https://autodirectocrm.vercel.app/api/camera-job/latest')
+  // Check if URL already has consignacion_id (e.g. opened from CRM link)
+  var urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('consignacion_id')) {
+    if (tip) tip.textContent = '📷 Vinculado a consignación #' + urlParams.get('consignacion_id');
+    return; // already linked — go straight to camera
+  }
+
+  fetch(CRM_BASE + '/api/camera-job/latest')
     .then(function(r) { return r.ok ? r.json() : Promise.reject(r.status); })
     .then(function(job) {
       if (!job.pending) {
-        if (tip) tip.textContent = '📷 Sin trabajo pendiente';
-        return; // no pending job — standalone mode, just take photos normally
+        // No pending job — show patente login
+        if (tip) tip.textContent = '� Ingresa una patente para empezar';
+        showPatenteLogin();
+        return;
       }
 
       // Store job data in S so upload bridge can use it
@@ -708,9 +806,155 @@ var S = { stream:null, face:'environment', cat:'sedan', idx:0, photos:[], upload
       document.getElementById('vehicle-confirm').classList.add('visible');
     })
     .catch(function(e) {
-      if (tip) tip.textContent = '⚠️ Sin conexión al CRM (' + e + ')';
+      // No connection to CRM — show patente login as fallback
+      if (tip) tip.textContent = '🔑 Ingresa una patente para empezar';
+      showPatenteLogin();
       console.warn('resolveJob failed', e);
     });
+})();
+
+// ── Patente Login Logic ──────────────────────────────────────────────────────
+function showPatenteLogin() {
+  document.getElementById('patente-login').classList.add('visible');
+  setTimeout(function() {
+    document.getElementById('pl-plate').focus();
+  }, 300);
+}
+
+function hidePatenteLogin() {
+  document.getElementById('patente-login').classList.remove('visible');
+}
+
+// Link camera to a consignacion (sets URL params so upload bridge works)
+function linkToConsignacion(consigId, appraisalId, label) {
+  S.consignacionId = consigId;
+  S.appraisalId = appraisalId;
+  var newParams = new URLSearchParams();
+  if (consigId) newParams.set('consignacion_id', consigId);
+  if (appraisalId) newParams.set('appraisal_id', appraisalId);
+  history.replaceState(null, '', window.location.pathname + '?' + newParams.toString());
+
+  // Update vehicle confirm label and show it
+  var vcLabel = document.getElementById('vc-label');
+  if (vcLabel) vcLabel.textContent = label || 'Vehículo';
+  var vcFrom = document.querySelector('.vc-from');
+  if (vcFrom) vcFrom.textContent = 'Consignación encontrada';
+  var tip = document.getElementById('perm-tip');
+  if (tip) tip.textContent = '🚗 ' + (label || 'Vinculado');
+
+  hidePatenteLogin();
+  document.getElementById('vehicle-confirm').classList.add('visible');
+}
+
+// Plate input handlers
+(function setupPatenteLogin() {
+  var plateInput = document.getElementById('pl-plate');
+  var searchBtn = document.getElementById('pl-search-btn');
+
+  plateInput.addEventListener('input', function() {
+    var val = plateInput.value.replace(/[^a-zA-Z0-9]/g, '');
+    plateInput.value = val.toUpperCase();
+    searchBtn.disabled = val.length < 4;
+    // Reset status and hide quick form when typing
+    document.getElementById('pl-status').textContent = '';
+    document.getElementById('pl-status').className = 'pl-status';
+    document.getElementById('pl-quick-form').classList.remove('visible');
+    searchBtn.textContent = '🔍 Buscar Consignación';
+  });
+
+  plateInput.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !searchBtn.disabled) searchBtn.click();
+  });
+
+  // Search button: look up plate in CRM
+  searchBtn.addEventListener('click', function() {
+    var plate = plateInput.value.trim().toUpperCase();
+    if (!plate || plate.length < 4) return;
+
+    var status = document.getElementById('pl-status');
+    status.textContent = 'Buscando…';
+    status.className = 'pl-status';
+    searchBtn.disabled = true;
+
+    fetch(CRM_BASE + '/api/consignaciones/by-plate/' + encodeURIComponent(plate))
+      .then(function(r) { return r.ok ? r.json() : Promise.reject(r.status); })
+      .then(function(data) {
+        if (data.found) {
+          status.textContent = '✅ ' + data.label + (data.owner_name ? ' — ' + data.owner_name : '');
+          status.className = 'pl-status ok';
+          setTimeout(function() {
+            linkToConsignacion(data.consignacion_id, data.appraisal_id, data.label);
+          }, 800);
+        } else {
+          status.textContent = '⚠️ No hay consignación para ' + plate + '. Crea una nueva:';
+          status.className = 'pl-status err';
+          document.getElementById('pl-quick-form').classList.add('visible');
+          searchBtn.textContent = '🔍 Buscar Consignación';
+          searchBtn.disabled = false;
+        }
+      })
+      .catch(function(e) {
+        status.textContent = '⚠️ Error de conexión. Puedes crear una nueva:';
+        status.className = 'pl-status err';
+        document.getElementById('pl-quick-form').classList.add('visible');
+        searchBtn.disabled = false;
+        console.warn('plate lookup failed', e);
+      });
+  });
+
+  // Create button: create quick consignacion
+  document.getElementById('pl-create-btn').addEventListener('click', function() {
+    var plate = plateInput.value.trim().toUpperCase();
+    if (!plate || plate.length < 4) return;
+
+    var status = document.getElementById('pl-status');
+    var createBtn = document.getElementById('pl-create-btn');
+    status.textContent = 'Creando consignación…';
+    status.className = 'pl-status';
+    createBtn.disabled = true;
+
+    var body = {
+      plate: plate,
+      owner_name: (document.getElementById('pl-owner').value || '').trim(),
+      owner_phone: (document.getElementById('pl-phone').value || '').trim(),
+      car_make: (document.getElementById('pl-make').value || '').trim(),
+      car_model: (document.getElementById('pl-model').value || '').trim(),
+      car_year: parseInt(document.getElementById('pl-year').value) || null
+    };
+
+    fetch(CRM_BASE + '/api/consignaciones/quick', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.ok || data.consignacion_id) {
+        status.textContent = '✅ ' + (data.created ? 'Creada' : 'Encontrada') + ': ' + (data.label || plate);
+        status.className = 'pl-status ok';
+        setTimeout(function() {
+          linkToConsignacion(data.consignacion_id, data.appraisal_id, data.label || plate);
+        }, 600);
+      } else {
+        status.textContent = '❌ ' + (data.error || 'Error al crear');
+        status.className = 'pl-status err';
+        createBtn.disabled = false;
+      }
+    })
+    .catch(function(e) {
+      status.textContent = '❌ Error de conexión';
+      status.className = 'pl-status err';
+      createBtn.disabled = false;
+      console.warn('quick create failed', e);
+    });
+  });
+
+  // Skip button: close patente login, proceed without linking
+  document.getElementById('pl-skip-btn').addEventListener('click', function() {
+    hidePatenteLogin();
+    var tip = document.getElementById('perm-tip');
+    if (tip) tip.textContent = '📷 Modo libre — fotos no vinculadas';
+  });
 })();
 
 function q(id) { return document.getElementById(id); }
@@ -1619,10 +1863,14 @@ q('vc-yes-btn').onclick = function() {
   // Camera permission screen is already showing — user just taps "Iniciar Cámara" next
 };
 q('vc-no-btn').onclick = function() {
-  // Clear the job so we run in standalone mode
+  // Clear the job and show patente login so user can pick a different car
   localStorage.removeItem('camera-job-token');
   history.replaceState(null, '', window.location.pathname);
+  S.consignacionId = null;
+  S.appraisalId = null;
+  S.jobToken = null;
   q('vehicle-confirm').classList.remove('visible');
+  showPatenteLogin();
 };
 
 // Interior prompt buttons
