@@ -751,7 +751,7 @@
     <button class="pl-btn" id="pl-create-btn" style="margin-top:8px;">✅ Crear y Empezar</button>
   </div>
 
-  <button class="pl-btn-skip" id="pl-skip-btn">Continuar sin patente →</button>
+  <button class="pl-btn-skip" id="pl-skip-btn">No tengo la patente — ingresar datos manualmente →</button>
 </div>
 
 <!-- EXISTING PHOTOS PROMPT — shown when vehicle already has photos -->
@@ -952,7 +952,15 @@ function linkToConsignacion(consigId, appraisalId, label) {
   // Create button: create quick consignacion
   document.getElementById('pl-create-btn').addEventListener('click', function() {
     var plate = plateInput.value.trim().toUpperCase();
-    if (!plate || plate.length < 4) return;
+    if (!plate || plate.length < 4) {
+      var status = document.getElementById('pl-status');
+      status.textContent = '⚠️ Ingresa la patente del vehículo (mínimo 4 caracteres)';
+      status.className = 'pl-status err';
+      plateInput.focus();
+      plateInput.style.borderColor = '#f87171';
+      setTimeout(function() { plateInput.style.borderColor = ''; }, 2000);
+      return;
+    }
 
     var status = document.getElementById('pl-status');
     var createBtn = document.getElementById('pl-create-btn');
@@ -996,11 +1004,20 @@ function linkToConsignacion(consigId, appraisalId, label) {
     });
   });
 
-  // Skip button: close patente login, proceed without linking
+  // Skip button: show vehicle data form (mini consignación) instead of bypassing
   document.getElementById('pl-skip-btn').addEventListener('click', function() {
-    hidePatenteLogin();
-    var tip = document.getElementById('perm-tip');
-    if (tip) tip.textContent = '📷 Modo libre — fotos no vinculadas';
+    // Hide the search area, show quick form with plate required
+    document.getElementById('pl-search-btn').style.display = 'none';
+    document.getElementById('pl-status').textContent = '📝 Ingresa los datos del vehículo para continuar';
+    document.getElementById('pl-status').className = 'pl-status';
+    document.getElementById('pl-quick-form').classList.add('visible');
+    document.getElementById('pl-plate').focus();
+    // Change skip text to hint
+    this.textContent = '';
+    this.style.display = 'none';
+    // Update title
+    document.querySelector('.pl-title').textContent = 'Datos del Vehículo';
+    document.querySelector('.pl-sub').textContent = 'Ingresa al menos la patente para vincular las fotos.';
   });
 })();
 
