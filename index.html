@@ -799,6 +799,8 @@
     <input type="text" class="pl-field" id="pl-make" placeholder="Ej: Toyota">
     <label>Modelo *</label>
     <input type="text" class="pl-field" id="pl-model" placeholder="Ej: Corolla">
+    <label>Versión</label>
+    <input type="text" class="pl-field" id="pl-version" placeholder="Ej: XEI 1.5" autocomplete="off">
     <div class="pl-row">
       <div style="flex:1"><label>Año *</label>
         <input type="number" class="pl-field" id="pl-year" placeholder="2020" min="1990" max="2030">
@@ -1161,6 +1163,7 @@ function plGoToStep(n) {
 
     var make = document.getElementById('pl-make').value.trim();
     var model = document.getElementById('pl-model').value.trim();
+    var version = document.getElementById('pl-version').value.trim();
     var year = parseInt(document.getElementById('pl-year').value) || null;
     var mileage = parseInt(document.getElementById('pl-mileage').value) || null;
 
@@ -1185,6 +1188,7 @@ function plGoToStep(n) {
       owner_email: document.getElementById('pl-email').value.trim(),
       car_make: make,
       car_model: model,
+      version: version,
       car_year: year,
       mileage: mileage
     };
