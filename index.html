@@ -756,8 +756,16 @@
 
   <!-- STEP 2: Owner data -->
   <div class="pl-step" id="pl-step-2">
-    <label>Nombre completo *</label>
-    <input type="text" class="pl-field" id="pl-owner" placeholder="Nombre y Apellido" autocomplete="name">
+    <div class="pl-row">
+      <div style="flex:1">
+        <label>Nombre *</label>
+        <input type="text" class="pl-field" id="pl-firstname" placeholder="Ej: Juan" autocomplete="given-name">
+      </div>
+      <div style="flex:1">
+        <label>Apellido *</label>
+        <input type="text" class="pl-field" id="pl-lastname" placeholder="Ej: Pérez" autocomplete="family-name">
+      </div>
+    </div>
     <label>RUT *</label>
     <input type="text" class="pl-field" id="pl-rut" placeholder="12.345.678-9" autocomplete="off" inputmode="text">
     <div class="pl-rut-indicator" id="pl-rut-indicator"></div>
@@ -1058,7 +1066,7 @@ function plGoToStep(n) {
             status.className = _plCarData ? 'pl-status ok' : 'pl-status err';
             searchBtn.disabled = false;
             plGoToStep(2);
-            document.getElementById('pl-owner').focus();
+            document.getElementById('pl-firstname').focus();
           });
       })
       .catch(function(e) {
@@ -1099,15 +1107,22 @@ function plGoToStep(n) {
   // ── Step 2: Next → Step 3 ────────────────────────────────────────────────
   document.getElementById('pl-next-2').addEventListener('click', function() {
     var status = document.getElementById('pl-status');
-    var owner = document.getElementById('pl-owner').value.trim();
+    var firstname = document.getElementById('pl-firstname').value.trim();
+    var lastname = document.getElementById('pl-lastname').value.trim();
     var rut = document.getElementById('pl-rut').value.trim();
     var phone = document.getElementById('pl-phone').value.trim();
 
     // Validate required fields
-    if (!owner || owner.split(' ').length < 2) {
-      status.textContent = '⚠️ Ingresa nombre y apellido';
+    if (!firstname) {
+      status.textContent = '⚠️ Ingresa el nombre';
       status.className = 'pl-status err';
-      document.getElementById('pl-owner').focus();
+      document.getElementById('pl-firstname').focus();
+      return;
+    }
+    if (!lastname) {
+      status.textContent = '⚠️ Ingresa el apellido';
+      status.className = 'pl-status err';
+      document.getElementById('pl-lastname').focus();
       return;
     }
     if (!rut || !validateRut(rut)) {
@@ -1164,7 +1179,7 @@ function plGoToStep(n) {
 
     var body = {
       plate: plate,
-      owner_name: document.getElementById('pl-owner').value.trim(),
+      owner_name: (document.getElementById('pl-firstname').value.trim() + ' ' + document.getElementById('pl-lastname').value.trim()).trim(),
       owner_rut: document.getElementById('pl-rut').value.trim(),
       owner_phone: country + ' ' + phone,
       owner_email: document.getElementById('pl-email').value.trim(),
