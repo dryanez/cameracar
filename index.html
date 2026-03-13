@@ -436,6 +436,63 @@
     .int-ext-thumbs { display:flex; gap:6px; flex-wrap:wrap; justify-content:center; margin-bottom:28px; max-width:340px; }
     .int-ext-thumb  { width:44px; height:44px; border-radius:8px; object-fit:cover; border:2px solid rgba(59,130,246,0.5); }
 
+    /* ── Social prompt overlay (after interior) ───────────── */
+    #social-prompt {
+      position:fixed; top:0; left:0; width:100%; height:var(--app-h,100vh);
+      background:rgba(0,0,0,0.92); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+      z-index:94; display:none; flex-direction:column;
+      align-items:center; justify-content:center;
+      padding:40px 28px; text-align:center;
+    }
+    #social-prompt.visible { display:flex; }
+    .soc-icon  { font-size:56px; margin-bottom:16px; animation: pop-in 0.4s cubic-bezier(0.175,0.885,0.32,1.275); }
+    .soc-title { font-size:24px; font-weight:700; color:#fff; margin-bottom:10px; }
+    .soc-sub   { font-size:15px; color:rgba(255,255,255,0.55); margin-bottom:36px; line-height:1.5; max-width:300px; }
+    .soc-btn-yes {
+      width:100%; max-width:320px;
+      background:linear-gradient(135deg,#ec4899,#a855f7); color:#fff; border:none;
+      padding:18px 24px; border-radius:16px;
+      font-size:17px; font-weight:700; cursor:pointer;
+      margin-bottom:12px; transition:transform 0.1s;
+    }
+    .soc-btn-yes:active { transform:scale(0.97); }
+    .soc-btn-no {
+      width:100%; max-width:320px;
+      background:rgba(255,255,255,0.1); color:#fff; border:none;
+      padding:14px 24px; border-radius:16px;
+      font-size:15px; font-weight:500; cursor:pointer;
+      transition:background 0.2s;
+    }
+    .soc-btn-no:active { background:rgba(255,255,255,0.2); }
+
+    /* ── Social capture mode (portrait, no overlays) ──────── */
+    #cam.social-mode #ghost,
+    #cam.social-mode #align-frame,
+    #cam.social-mode #align-hud,
+    #cam.social-mode .land-panel,
+    #cam.social-mode #tabs,
+    #cam.social-mode #shots { display:none !important; }
+    #social-hud {
+      display:none; position:absolute; top:0; left:0; right:0; z-index:20;
+      padding:16px; padding-top:max(env(safe-area-inset-top,16px),20px);
+      text-align:center;
+    }
+    #cam.social-mode #social-hud { display:block; }
+    .social-label {
+      display:inline-block; background:linear-gradient(135deg,rgba(236,72,153,0.3),rgba(168,85,247,0.3));
+      border:1px solid rgba(236,72,153,0.4); border-radius:12px;
+      padding:8px 16px; font-size:13px; font-weight:600; color:#fff;
+    }
+    .social-count { font-size:11px; color:rgba(255,255,255,0.5); margin-top:6px; }
+    #social-done-btn {
+      display:none; position:absolute; bottom:120px; left:50%; transform:translateX(-50%);
+      z-index:30; background:rgba(34,197,94,0.9); color:#fff; border:none;
+      padding:14px 32px; border-radius:16px; font-size:15px; font-weight:700;
+      cursor:pointer; transition:transform 0.1s;
+    }
+    #cam.social-mode #social-done-btn { display:block; }
+    #social-done-btn:active { transform:translateX(-50%) scale(0.96); }
+
     /* ── Vehicle Confirm overlay ───────────────────────────── */
     #vehicle-confirm {
       position:fixed; top:0; left:0; width:100%; height:var(--app-h,100vh);
@@ -642,6 +699,13 @@
   <div class="land-left" id="land-left"></div>
   <div class="land-right" id="land-right"></div>
 
+  <!-- Social mode HUD (visible only in social-mode) -->
+  <div id="social-hud">
+    <div class="social-label">📱 Modo Social — Fotos Verticales</div>
+    <div class="social-count" id="social-count-text">0 fotos sociales</div>
+  </div>
+  <button id="social-done-btn">✅ Listo — Terminar</button>
+
   <div class="flash-screen" id="flash"></div>
 </div>
 
@@ -676,6 +740,15 @@
   <div class="int-ext-thumbs" id="int-ext-thumbs"></div>
   <button class="int-btn-yes" id="int-yes-btn">📷 Sí, tomar interior</button>
   <button class="int-btn-no"  id="int-no-btn">✓ No, ya terminé</button>
+</div>
+
+<!-- SOCIAL PROMPT — shown after interior (or after exterior if user skipped interior) -->
+<div id="social-prompt">
+  <div class="soc-icon">📱</div>
+  <div class="soc-title">Fotos para redes</div>
+  <div class="soc-sub">¿Quieres tomar fotos verticales para redes sociales? Estas fotos no se publican en autodirecto.cl.</div>
+  <button class="soc-btn-yes" id="soc-yes-btn">📱 Sí, tomar fotos sociales</button>
+  <button class="soc-btn-no"  id="soc-no-btn">✓ No, ya terminé</button>
 </div>
 
 <!-- PWA Install Banner (small, bottom, for general use) -->
@@ -870,7 +943,7 @@ var OV = {
   ]
 };
 
-var S = { stream:null, face:'environment', cat:'sedan', idx:0, photos:[], uploadedCount:0, uploadingCount:0, jobToken:null };
+var S = { stream:null, face:'environment', cat:'sedan', idx:0, photos:[], uploadedCount:0, uploadingCount:0, jobToken:null, socialMode:false, socialCount:0 };
 
 var CRM_BASE = 'https://autodirectocrm.vercel.app';
 
@@ -1455,15 +1528,31 @@ function capture() {
     q('cap').classList.remove('flash');
   }, 150);
   var url = c.toDataURL('image/jpeg', 0.92);
-  var shot = OV[S.cat][S.idx];
-  S.photos.push({ url:url, label:S.cat + ' - ' + shot.l, time:new Date().toLocaleTimeString() });
-  updGal();
-  toast('✓ ' + shot.l);
+
+  // Determine photo label and type based on mode
+  var photoLabel, photoType;
+  if (S.socialMode) {
+    S.socialCount++;
+    photoLabel = 'social - Foto ' + S.socialCount;
+    photoType = 'social';
+    S.photos.push({ url:url, label:photoLabel, time:new Date().toLocaleTimeString() });
+    updGal();
+    toast('📱 Social #' + S.socialCount);
+    q('social-count-text').textContent = S.socialCount + ' foto' + (S.socialCount !== 1 ? 's' : '') + ' social' + (S.socialCount !== 1 ? 'es' : '');
+  } else {
+    var shot = OV[S.cat][S.idx];
+    photoLabel = S.cat + ' - ' + shot.l;
+    // exterior categories = sedan/suv/truck, interior category = interior
+    photoType = (S.cat === 'interior') ? 'interior' : 'exterior';
+    S.photos.push({ url:url, label:photoLabel, time:new Date().toLocaleTimeString() });
+    updGal();
+    toast('✓ ' + shot.l);
+  }
 
   // ── CRM Upload Bridge ──────────────────────────────────────────────────────
   // If opened from the CRM with ?appraisal_id=xxx or ?consignacion_id=xxx,
   // upload this photo directly to autodirectocrm.vercel.app.
-  (function uploadToCRM(dataUrl, label) {
+  (function uploadToCRM(dataUrl, label, pType) {
     var params = new URLSearchParams(window.location.search);
     var appraisalId     = params.get('appraisal_id');
     var consignacionId  = params.get('consignacion_id');
@@ -1472,8 +1561,8 @@ function capture() {
 
     // Decide endpoint: consignacion_id route auto-creates appraisal UUID if needed
     var uploadUrl = appraisalId
-      ? 'https://autodirectocrm.vercel.app/api/inspecciones/fotos'
-      : 'https://autodirectocrm.vercel.app/api/consignaciones/' + consignacionId + '/fotos';
+      ? CRM_BASE + '/api/inspecciones/fotos'
+      : CRM_BASE + '/api/consignaciones/' + consignacionId + '/fotos';
 
     // Convert base64 dataURL → Blob
     fetch(dataUrl)
@@ -1484,6 +1573,7 @@ function capture() {
         var fd = new FormData();
         fd.append('file', blob, filename);
         if (appraisalId) fd.append('appraisal_id', appraisalId);
+        fd.append('photo_type', pType);
         return fetch(uploadUrl, {
           method: 'POST',
           headers: { 'X-API-Key': 'mrcar2024' },
@@ -1504,8 +1594,15 @@ function capture() {
         }
       })
       .catch(function(e) { console.warn('CRM upload failed', e); });
-  })(url, S.cat + ' - ' + shot.l);
+  })(url, photoLabel, photoType);
   // ──────────────────────────────────────────────────────────────────────────
+
+  // In social mode, don't advance — user takes unlimited photos and hits Done
+  if (S.socialMode) {
+    // Reset alignment for next capture
+    resetAlign();
+    return;
+  }
 
   if (S.idx < OV[S.cat].length - 1) {
     setTimeout(function() { pickShot(S.idx + 1); }, 800);
@@ -1516,8 +1613,8 @@ function capture() {
       // Ask if they want interior photos too
       setTimeout(showInteriorPrompt, 1200);
     } else {
-      // Interior (or any other category) finished — show final done screen
-      setTimeout(showDoneOverlay, 1200);
+      // Interior finished — ask if they want social/vertical photos
+      setTimeout(showSocialPrompt, 1200);
     }
   }
 }
@@ -2043,6 +2140,42 @@ function showInteriorPrompt() {
   if (navigator.vibrate) navigator.vibrate([80, 40, 80]);
 }
 
+function showSocialPrompt() {
+  q('social-prompt').classList.add('visible');
+  if (navigator.vibrate) navigator.vibrate([80, 40, 80]);
+}
+
+function enterSocialMode() {
+  S.socialMode = true;
+  S.socialCount = 0;
+  // Add social-mode class to camera view (hides overlays, shows social HUD)
+  q('cam').classList.add('social-mode');
+  q('social-count-text').textContent = '0 fotos sociales';
+  // Try to lock to portrait orientation
+  if (screen.orientation && screen.orientation.lock) {
+    screen.orientation.lock('portrait').catch(function() {
+      console.log('Portrait lock not supported');
+    });
+  }
+  // Reset alignment state
+  resetAlign();
+  toast('📱 Modo Social — gira el teléfono vertical');
+}
+
+function exitSocialMode() {
+  S.socialMode = false;
+  q('cam').classList.remove('social-mode');
+  // Unlock orientation (let it go back to whatever)
+  if (screen.orientation && screen.orientation.unlock) {
+    screen.orientation.unlock();
+  }
+  // Re-lock landscape for normal mode
+  if (screen.orientation && screen.orientation.lock) {
+    screen.orientation.lock('landscape').catch(function(){});
+  }
+  showDoneOverlay();
+}
+
 function updateDoneStatus() {
   var overlay = q('done-overlay');
   if (!overlay.classList.contains('visible')) return;
@@ -2208,7 +2341,22 @@ q('int-yes-btn').onclick = function() {
 };
 q('int-no-btn').onclick = function() {
   q('interior-prompt').classList.remove('visible');
+  showSocialPrompt();
+};
+
+// Social prompt buttons
+q('soc-yes-btn').onclick = function() {
+  q('social-prompt').classList.remove('visible');
+  enterSocialMode();
+};
+q('soc-no-btn').onclick = function() {
+  q('social-prompt').classList.remove('visible');
   showDoneOverlay();
+};
+
+// Social mode "Done" button
+q('social-done-btn').onclick = function() {
+  exitSocialMode();
 };
 
 q('tabs').onclick = function(e) {
