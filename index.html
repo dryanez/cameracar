@@ -759,10 +759,10 @@
 
   <!-- Social mode HUD (visible only in social-mode) -->
   <div id="social-hud">
-    <div class="social-label">📱 Modo Social — Fotos Verticales</div>
+    <div class="social-label">📱 Modo Social — Mismas Tomas en Vertical</div>
     <div class="social-count" id="social-count-text">0 fotos sociales</div>
   </div>
-  <button id="social-done-btn">✅ Listo — Terminar</button>
+  <button id="social-done-btn">✅ Saltar resto — Terminar</button>
 
   <div class="flash-screen" id="flash"></div>
 </div>
@@ -813,7 +813,7 @@
 <div id="social-prompt">
   <div class="soc-icon">📱</div>
   <div class="soc-title">Fotos para redes</div>
-  <div class="soc-sub">¿Quieres tomar fotos verticales para redes sociales? Estas fotos no se publican en autodirecto.cl.</div>
+  <div class="soc-sub">¿Quieres repetir las tomas exteriores en vertical para redes sociales? Las mismas poses, una por una. Estas fotos no se publican en autodirecto.cl.</div>
   <button class="soc-btn-yes" id="soc-yes-btn">📱 Sí, tomar fotos sociales</button>
   <button class="soc-btn-no"  id="soc-no-btn">✓ No, ya terminé</button>
 </div>
@@ -1497,6 +1497,10 @@ function flipCam() {
 // Category
 function loadCat(cat) {
   S.cat = cat;
+  // Remember the first exterior category chosen (for social mode re-shoot)
+  if (cat !== 'interior' && !S.originalCat) {
+    S.originalCat = cat;
+  }
   S.idx = 0;
   var tabBtns = document.querySelectorAll('.cat-tab');
   for (var i = 0; i < tabBtns.length; i++) {
@@ -1608,12 +1612,13 @@ function capture() {
     q('extras-count-text').textContent = S.extrasCount + ' foto' + (S.extrasCount !== 1 ? 's' : '') + ' extra' + (S.extrasCount !== 1 ? 's' : '');
   } else if (S.socialMode) {
     S.socialCount++;
-    photoLabel = 'social - Foto ' + S.socialCount;
+    var socialShot = S.socialShots[S.socialIdx];
+    photoLabel = 'social - ' + socialShot.l;
     photoType = 'social';
     S.photos.push({ url:url, label:photoLabel, time:new Date().toLocaleTimeString() });
     updGal();
-    toast('📱 Social #' + S.socialCount);
-    q('social-count-text').textContent = S.socialCount + ' foto' + (S.socialCount !== 1 ? 's' : '') + ' social' + (S.socialCount !== 1 ? 'es' : '');
+    toast('📱 Social ' + S.socialCount + '/' + S.socialShots.length + ' — ' + socialShot.l);
+    q('social-count-text').textContent = S.socialCount + ' / ' + S.socialShots.length + ' fotos sociales';
   } else {
     var shot = OV[S.cat][S.idx];
     photoLabel = S.cat + ' - ' + shot.l;
@@ -1678,10 +1683,26 @@ function capture() {
     return;
   }
 
-  // In social mode, don't advance — user takes unlimited photos and hits Done
+  // In social mode, advance to next exterior overlay (one by one)
   if (S.socialMode) {
-    // Reset alignment for next capture
-    resetAlign();
+    if (S.socialIdx < S.socialShots.length - 1) {
+      // Move to next overlay
+      setTimeout(function() {
+        S.socialIdx++;
+        q('overlay-img').src = S.socialShots[S.socialIdx].f;
+        q('align-sub').textContent = S.socialShots[S.socialIdx].l + ' (Social)';
+        // Update carousel active state
+        var thumbs = document.querySelectorAll('.shot-thumb');
+        for (var j = 0; j < thumbs.length; j++) {
+          if (j === S.socialIdx) thumbs[j].classList.add('active');
+          else thumbs[j].classList.remove('active');
+        }
+        resetAlign();
+      }, 800);
+    } else {
+      // All exterior overlays done in social mode — finish
+      setTimeout(function() { exitSocialMode(); }, 1200);
+    }
     return;
   }
 
@@ -2252,16 +2273,38 @@ function showSocialPrompt() {
 function enterSocialMode() {
   S.socialMode = true;
   S.socialCount = 0;
-  // Add social-mode class to camera view (shows social HUD + done btn, keeps overlays)
+  // Remember which exterior category was originally chosen (sedan/suv/truck)
+  S.socialCat = S.originalCat || S.cat;
+  if (S.socialCat === 'interior') S.socialCat = 'sedan'; // fallback
+  S.socialIdx = 0;
+  S.socialShots = OV[S.socialCat]; // same exterior overlays
+
+  // Add social-mode class to camera view (shows social HUD + done btn)
   q('cam').classList.add('social-mode');
-  q('social-count-text').textContent = '0 fotos sociales';
+  q('social-count-text').textContent = '0 / ' + S.socialShots.length + ' fotos sociales';
+
+  // Load the first exterior overlay for social re-shoot
+  q('overlay-img').src = S.socialShots[0].f;
+  q('align-sub').textContent = S.socialShots[0].l + ' (Social)';
+
+  // Rebuild shot carousel for social mode with exterior overlays
+  var html = '';
+  for (var i = 0; i < S.socialShots.length; i++) {
+    html += '<div class="shot-thumb' + (i === 0 ? ' active' : '') + '" data-i="' + i + '">';
+    html += '<img src="' + S.socialShots[i].f + '" alt="' + S.socialShots[i].l + '">';
+    html += '</div>';
+  }
+  q('shots').innerHTML = html;
+  syncLandPanels();
+  resetAlign();
+
   // Try to lock to portrait orientation
   if (screen.orientation && screen.orientation.lock) {
     screen.orientation.lock('portrait').catch(function() {
       console.log('Portrait lock not supported');
     });
   }
-  toast('📱 Modo Social — gira el teléfono vertical');
+  toast('📱 Modo Social — mismas tomas en vertical');
 }
 
 function exitSocialMode() {
@@ -2485,7 +2528,23 @@ q('tabs').onclick = function(e) {
 q('shots').onclick = function(e) {
   var t = e.target;
   while (t && !t.classList.contains('shot-thumb')) t = t.parentElement;
-  if (t && t.dataset.i !== undefined) pickShot(parseInt(t.dataset.i));
+  if (t && t.dataset.i !== undefined) {
+    var idx = parseInt(t.dataset.i);
+    if (S.socialMode && S.socialShots) {
+      // In social mode, update the social overlay index
+      S.socialIdx = idx;
+      q('overlay-img').src = S.socialShots[idx].f;
+      q('align-sub').textContent = S.socialShots[idx].l + ' (Social)';
+      var thumbs = document.querySelectorAll('.shot-thumb');
+      for (var j = 0; j < thumbs.length; j++) {
+        if (j === idx) thumbs[j].classList.add('active');
+        else thumbs[j].classList.remove('active');
+      }
+      resetAlign();
+    } else {
+      pickShot(idx);
+    }
+  }
 };
 
 document.onkeydown = function(e) {
