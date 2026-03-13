@@ -465,13 +465,64 @@
     }
     .soc-btn-no:active { background:rgba(255,255,255,0.2); }
 
-    /* ── Social capture mode (portrait, no overlays) ──────── */
-    #cam.social-mode #ghost,
-    #cam.social-mode #align-frame,
-    #cam.social-mode #align-hud,
-    #cam.social-mode .land-panel,
-    #cam.social-mode #tabs,
-    #cam.social-mode #shots { display:none !important; }
+    /* ── Extras prompt overlay (after interior, before social) ── */
+    #extras-prompt {
+      position:fixed; top:0; left:0; width:100%; height:var(--app-h,100vh);
+      background:rgba(0,0,0,0.92); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+      z-index:94; display:none; flex-direction:column;
+      align-items:center; justify-content:center;
+      padding:40px 28px; text-align:center;
+    }
+    #extras-prompt.visible { display:flex; }
+    .ext-icon  { font-size:56px; margin-bottom:16px; animation: pop-in 0.4s cubic-bezier(0.175,0.885,0.32,1.275); }
+    .ext-title { font-size:24px; font-weight:700; color:#fff; margin-bottom:10px; }
+    .ext-sub   { font-size:15px; color:rgba(255,255,255,0.55); margin-bottom:36px; line-height:1.5; max-width:300px; }
+    .ext-btn-yes {
+      width:100%; max-width:320px;
+      background:linear-gradient(135deg,#f59e0b,#ef4444); color:#fff; border:none;
+      padding:18px 24px; border-radius:16px;
+      font-size:17px; font-weight:700; cursor:pointer;
+      margin-bottom:12px; transition:transform 0.1s;
+    }
+    .ext-btn-yes:active { transform:scale(0.97); }
+    .ext-btn-no {
+      width:100%; max-width:320px;
+      background:rgba(255,255,255,0.1); color:#fff; border:none;
+      padding:14px 24px; border-radius:16px;
+      font-size:15px; font-weight:500; cursor:pointer;
+      transition:background 0.2s;
+    }
+    .ext-btn-no:active { background:rgba(255,255,255,0.2); }
+
+    /* ── Extras capture mode (landscape, no overlays, free-form) ── */
+    #cam.extras-mode #ghost,
+    #cam.extras-mode #align-frame,
+    #cam.extras-mode #align-hud,
+    #cam.extras-mode .land-panel,
+    #cam.extras-mode #tabs,
+    #cam.extras-mode #shots { display:none !important; }
+    #extras-hud {
+      display:none; position:absolute; top:0; left:0; right:0; z-index:20;
+      padding:16px; padding-top:max(env(safe-area-inset-top,16px),20px);
+      text-align:center;
+    }
+    #cam.extras-mode #extras-hud { display:block; }
+    .extras-label {
+      display:inline-block; background:linear-gradient(135deg,rgba(245,158,11,0.3),rgba(239,68,68,0.3));
+      border:1px solid rgba(245,158,11,0.4); border-radius:12px;
+      padding:8px 16px; font-size:13px; font-weight:600; color:#fff;
+    }
+    .extras-count { font-size:11px; color:rgba(255,255,255,0.5); margin-top:6px; }
+    #extras-done-btn {
+      display:none; position:absolute; bottom:120px; left:50%; transform:translateX(-50%);
+      z-index:30; background:rgba(34,197,94,0.9); color:#fff; border:none;
+      padding:14px 32px; border-radius:16px; font-size:15px; font-weight:700;
+      cursor:pointer; transition:transform 0.1s;
+    }
+    #cam.extras-mode #extras-done-btn { display:block; }
+    #extras-done-btn:active { transform:translateX(-50%) scale(0.96); }
+
+    /* ── Social capture mode (portrait, keeps overlays) ──────── */
     #social-hud {
       display:none; position:absolute; top:0; left:0; right:0; z-index:20;
       padding:16px; padding-top:max(env(safe-area-inset-top,16px),20px);
@@ -699,6 +750,13 @@
   <div class="land-left" id="land-left"></div>
   <div class="land-right" id="land-right"></div>
 
+  <!-- Extras mode HUD (visible only in extras-mode) -->
+  <div id="extras-hud">
+    <div class="extras-label">🔧 Fotos Extras — Motor, Maletero, Detalles</div>
+    <div class="extras-count" id="extras-count-text">0 fotos extras</div>
+  </div>
+  <button id="extras-done-btn">✅ Listo — Siguiente</button>
+
   <!-- Social mode HUD (visible only in social-mode) -->
   <div id="social-hud">
     <div class="social-label">📱 Modo Social — Fotos Verticales</div>
@@ -742,7 +800,16 @@
   <button class="int-btn-no"  id="int-no-btn">✓ No, ya terminé</button>
 </div>
 
-<!-- SOCIAL PROMPT — shown after interior (or after exterior if user skipped interior) -->
+<!-- EXTRAS PROMPT — shown after interior, before social -->
+<div id="extras-prompt">
+  <div class="ext-icon">🔧</div>
+  <div class="ext-title">Fotos adicionales</div>
+  <div class="ext-sub">¿Quieres tomar fotos sin guía? Motor, maletero, detalles, daños, etc. Estas fotos se publican junto con las exteriores.</div>
+  <button class="ext-btn-yes" id="ext-yes-btn">📷 Sí, tomar fotos extras</button>
+  <button class="ext-btn-no"  id="ext-no-btn">⏭ No, continuar</button>
+</div>
+
+<!-- SOCIAL PROMPT — shown after extras (or if user skipped extras) -->
 <div id="social-prompt">
   <div class="soc-icon">📱</div>
   <div class="soc-title">Fotos para redes</div>
@@ -943,7 +1010,7 @@ var OV = {
   ]
 };
 
-var S = { stream:null, face:'environment', cat:'sedan', idx:0, photos:[], uploadedCount:0, uploadingCount:0, jobToken:null, socialMode:false, socialCount:0 };
+var S = { stream:null, face:'environment', cat:'sedan', idx:0, photos:[], uploadedCount:0, uploadingCount:0, jobToken:null, socialMode:false, socialCount:0, extrasMode:false, extrasCount:0 };
 
 var CRM_BASE = 'https://autodirectocrm.vercel.app';
 
@@ -1531,7 +1598,15 @@ function capture() {
 
   // Determine photo label and type based on mode
   var photoLabel, photoType;
-  if (S.socialMode) {
+  if (S.extrasMode) {
+    S.extrasCount++;
+    photoLabel = 'extra - Foto ' + S.extrasCount;
+    photoType = 'exterior'; // extras go on listing (same as exterior)
+    S.photos.push({ url:url, label:photoLabel, time:new Date().toLocaleTimeString() });
+    updGal();
+    toast('🔧 Extra #' + S.extrasCount);
+    q('extras-count-text').textContent = S.extrasCount + ' foto' + (S.extrasCount !== 1 ? 's' : '') + ' extra' + (S.extrasCount !== 1 ? 's' : '');
+  } else if (S.socialMode) {
     S.socialCount++;
     photoLabel = 'social - Foto ' + S.socialCount;
     photoType = 'social';
@@ -1597,6 +1672,12 @@ function capture() {
   })(url, photoLabel, photoType);
   // ──────────────────────────────────────────────────────────────────────────
 
+  // In extras mode, don't advance — user takes unlimited photos and hits Done
+  if (S.extrasMode) {
+    resetAlign();
+    return;
+  }
+
   // In social mode, don't advance — user takes unlimited photos and hits Done
   if (S.socialMode) {
     // Reset alignment for next capture
@@ -1613,8 +1694,8 @@ function capture() {
       // Ask if they want interior photos too
       setTimeout(showInteriorPrompt, 1200);
     } else {
-      // Interior finished — ask if they want social/vertical photos
-      setTimeout(showSocialPrompt, 1200);
+      // Interior finished — ask if they want extra free-form photos
+      setTimeout(showExtrasPrompt, 1200);
     }
   }
 }
@@ -2140,6 +2221,29 @@ function showInteriorPrompt() {
   if (navigator.vibrate) navigator.vibrate([80, 40, 80]);
 }
 
+function showExtrasPrompt() {
+  q('extras-prompt').classList.add('visible');
+  if (navigator.vibrate) navigator.vibrate([80, 40, 80]);
+}
+
+function enterExtrasMode() {
+  S.extrasMode = true;
+  S.extrasCount = 0;
+  // Add extras-mode class to camera view (hides overlays, shows extras HUD)
+  q('cam').classList.add('extras-mode');
+  q('extras-count-text').textContent = '0 fotos extras';
+  // Reset alignment state
+  resetAlign();
+  toast('🔧 Modo Extras — motor, maletero, detalles');
+}
+
+function exitExtrasMode() {
+  S.extrasMode = false;
+  q('cam').classList.remove('extras-mode');
+  // After extras, ask about social/vertical photos
+  showSocialPrompt();
+}
+
 function showSocialPrompt() {
   q('social-prompt').classList.add('visible');
   if (navigator.vibrate) navigator.vibrate([80, 40, 80]);
@@ -2148,7 +2252,7 @@ function showSocialPrompt() {
 function enterSocialMode() {
   S.socialMode = true;
   S.socialCount = 0;
-  // Add social-mode class to camera view (hides overlays, shows social HUD)
+  // Add social-mode class to camera view (shows social HUD + done btn, keeps overlays)
   q('cam').classList.add('social-mode');
   q('social-count-text').textContent = '0 fotos sociales';
   // Try to lock to portrait orientation
@@ -2157,8 +2261,6 @@ function enterSocialMode() {
       console.log('Portrait lock not supported');
     });
   }
-  // Reset alignment state
-  resetAlign();
   toast('📱 Modo Social — gira el teléfono vertical');
 }
 
@@ -2341,7 +2443,22 @@ q('int-yes-btn').onclick = function() {
 };
 q('int-no-btn').onclick = function() {
   q('interior-prompt').classList.remove('visible');
+  showExtrasPrompt();
+};
+
+// Extras prompt buttons
+q('ext-yes-btn').onclick = function() {
+  q('extras-prompt').classList.remove('visible');
+  enterExtrasMode();
+};
+q('ext-no-btn').onclick = function() {
+  q('extras-prompt').classList.remove('visible');
   showSocialPrompt();
+};
+
+// Extras mode "Done" button
+q('extras-done-btn').onclick = function() {
+  exitExtrasMode();
 };
 
 // Social prompt buttons
